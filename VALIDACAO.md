@@ -3,7 +3,7 @@
 ## Verificado
 
 - Sintaxe de todos os ficheiros JavaScript da aplicação, através de `node --check`.
-- **16 testes aprovados**: tratamento de HTML, pesquisa sem acentos, conversão Europe/Lisbon, horas inexistentes/repetidas, duração de eventos, ordenação de agenda/arquivo, convites Discord e carregamento de mais de 1000 respostas.
+- **17 testes aprovados**: tratamento de HTML, pesquisa sem acentos, conversão Europe/Lisbon, horas inexistentes/repetidas, duração de eventos, ordenação de agenda/arquivo, convites Discord e carregamento de mais de 1000 respostas.
 - Execução real de `01_schema.sql` e `02_seed.sql` em PostgreSQL/PGlite, incluindo tabelas, funções, relações, índices e políticas RLS. Os esquemas Auth e Storage do Supabase são simulados nessa execução local.
 - Visitantes sem acesso às tabelas internas; início limitado a títulos de anúncios e contagem de efetivos.
 - Contas novas não se aprovam nem recebem Comando através de metadados de registo.
@@ -25,3 +25,9 @@ Não foi fornecido um projeto Supabase configurado nem as suas chaves públicas.
 O portal não apresenta uma sessão de demonstração em produção e não concede Comando à primeira conta. Os ficheiros de teste usados na pré-visualização não integram o site nem o ZIP.
 
 Para a verificação final da instalação, cria uma conta Comando e uma conta membro. Aprova apenas Eventos para o membro, confirma o acesso e o voto, retira a permissão e confirma que a mesma conta deixa de conseguir consultar e votar. Depois atribui Registos, primeiro sem e depois com autorização de criação, e verifica o comportamento. Testa a confirmação/recuperação por email e o upload de uma fotografia com a configuração real.
+
+## Atualização visual — referência Lovable
+
+A aparência pública foi reconstruída a partir de `pixel-perfect-recreation-506.lovable.app`, com os mesmos recursos de fundo e brasão e as famílias Barlow / Barlow Condensed servidas localmente. A comparação de Início confirmou as mesmas dimensões principais no mesmo navegador: cabeçalho de 73 px, destaque de 424 px e cartões de 144 px. Contactos e Entrar também foram comparados. As áreas privadas da referência exigem conta aprovada e não foram consultadas. O tema foi aplicado às funcionalidades internas existentes.
+
+Foi acrescentado um teste PostgreSQL para confirmar que a estatística de treinamentos divulga apenas contagens e não permite a visitantes ler os documentos. Os 17 testes passaram.

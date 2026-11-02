@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b0d0c">
+  <meta name="theme-color" content="#101114">
   <meta name="description" content="Portal da USHE — Unidade de Segurança e Honras do Estado. Cidade Diamond. Honra, Disciplina e Excelência.">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self' https://*.supabase.co https://*.supabase.in wss://*.supabase.co; base-uri 'self'; form-action 'self'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' blob:; connect-src 'self' https://*.supabase.co https://*.supabase.in wss://*.supabase.co; base-uri 'self'; form-action 'self'; object-src 'none'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <title>USHE — Cidade Diamond</title>
+  <title>USHE – Unidade de Segurança e Honras do Estado</title>
   <link rel="icon" href="./favicon.ico">
   <link rel="stylesheet" href="./style.css">
   <script src="./config.js" defer></script>
@@ -19,15 +19,15 @@
   <header class="site-header">
     <div class="header-inner">
       <a class="brand" href="#/" aria-label="USHE — Início">
-        <img src="./images/ushe-emblema.png" alt="Brasão da USHE" width="52" height="60">
-        <span><strong>USHE<span class="brand-divider"> / </span><small>DIAMOND</small></strong><em>Honra, Disciplina e Excelência</em></span>
+        <img src="./images/ushe-brasao.png" alt="Brasão da USHE" width="40" height="48">
+        <strong>USHE</strong><span id="header-motto" class="sr-only">Honra, Disciplina e Excelência</span>
       </a>
-      <div class="header-actions"><span class="portal-label">PORTAL INSTITUCIONAL</span><button id="menu-toggle" class="icon-button" aria-expanded="false" aria-controls="main-nav" aria-label="Abrir menu">☰</button></div>
+      <nav id="main-nav" class="main-nav" aria-label="Menu principal"></nav>
+      <div class="header-actions"><a id="header-account" class="button account-button" href="#/entrar">Entrar</a><button id="menu-toggle" class="icon-button" aria-expanded="false" aria-controls="main-nav" aria-label="Menu"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h16"/></svg></button></div>
     </div>
-    <nav id="main-nav" class="main-nav" aria-label="Navegação principal"></nav>
   </header>
   <main id="main" tabindex="-1"><div class="container loading" role="status">A preparar o portal…</div></main>
-  <footer class="site-footer"><div class="container footer-inner"><div><strong>USHE <span>· CIDADE DIAMOND</span></strong><p id="footer-motto">Honra, Disciplina e Excelência</p></div><div><a href="#/contactos">Contactar o Comando ↗</a><p>Unidade de roleplay · Inspirada na GNR</p></div></div></footer>
+  <footer class="site-footer"><div class="container footer-inner"><p>© <span id="copyright-year">2026</span> USHE – Unidade de Segurança e Honras do Estado<span id="footer-motto" class="sr-only"> · Honra, Disciplina e Excelência</span></p><a id="footer-discord" class="button discord-button" href="https://discord.com" target="_blank" rel="noopener noreferrer">Entrar no Discord</a></div></footer>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <dialog id="editor" aria-labelledby="editor-title"><div class="dialog-header"><h2 id="editor-title">Editar</h2><button type="button" id="close-editor" class="icon-button" aria-label="Fechar formulário">×</button></div><div id="editor-body"></div></dialog>
   <noscript><p class="container notice">Ativa o JavaScript no navegador para utilizar o portal.</p></noscript>

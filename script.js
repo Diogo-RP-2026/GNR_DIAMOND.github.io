@@ -1,5 +1,5 @@
 // Ponto de entrada: navegação por fragmento (#/), compatível com GitHub Pages.
-import {e,TABS,toast,errorMessage,empty} from './js/core.js';
+import {e,TABS,toast,errorMessage,empty,discordURL} from './js/core.js';
 import {db,state,isCommand,hasTab,loadIdentity,hydrateImages,releaseImages,result,rpc} from './js/api.js';
 import * as views from './js/views.js';
 import {openEditor,openAccess,closeEditor,isDirty,submitContent,submitAccess,submitAuth,deleteRecord,formError} from './js/forms.js';
@@ -14,9 +14,13 @@ function route() {
 function navigation() {
   const current=route().name;
   const links=[['','Início'],...TABS.filter(([key])=>hasTab(key)),['contactos','Contactos'],...(isCommand()?[['administracao','Administração']]:[])];
-  document.querySelector('#main-nav').innerHTML=`<div class="nav-inner">${links.map(([key,label])=>`<a href="#/${key}" ${current===key?'aria-current="page"':''}>${e(label)}</a>`).join('')}<a class="nav-account" href="#/entrar" ${current==='entrar'?'aria-current="page"':''}>${state.user?e(state.profile?.full_name || 'A minha conta'):'Entrar ↗'}</a></div>`;
+  document.querySelector('#main-nav').innerHTML=`<div class="nav-inner">${links.map(([key,label])=>`<a href="#/${key}" ${current===key?'aria-current="page"':''}>${e(label)}</a>`).join('')}<a class="mobile-account" href="#/entrar">${state.user?e(state.profile?.full_name || 'A minha conta'):'Entrar'}</a></div>`;
+  const account=document.querySelector('#header-account');account.textContent=state.user?(state.profile?.full_name || 'A minha conta'):'Entrar';
+  if(current==='entrar')account.setAttribute('aria-current','page');else account.removeAttribute('aria-current');
   const motto=state.publicInfo?.motto || 'Honra, Disciplina e Excelência';
-  document.querySelector('.brand em').textContent=motto;document.querySelector('#footer-motto').textContent=motto;
+  document.querySelector('#header-motto').textContent=motto;document.querySelector('#footer-motto').textContent=` · ${motto}`;
+  document.querySelector('#footer-discord').href=discordURL(state.publicInfo?.discord_url) || 'https://discord.com';
+  document.querySelector('#copyright-year').textContent=new Date().getFullYear();
 }
 async function render({preserveScroll=false,identity=true}={}) {
   const seq=++renderSequence,scroll=window.scrollY;
@@ -26,15 +30,18 @@ async function render({preserveScroll=false,identity=true}={}) {
     if(seq!==renderSequence)return;
     navigation();
     const r=route();let page;
+    if(r.name==='treinamentos'&&!state.user){location.replace('#/entrar?reason=login');return;}
     if(!r.name)page=await views.home();
     else if(r.name==='contactos')page=await views.contacts();
     else if(r.name==='entrar')page=views.login(r.params.get('modo'));
     else if(r.name==='administracao')page=isCommand()?await views.administration(r.params.get('area') || 'users'):views.restricted();
+    else if(r.name==='treinamentos')page=hasTab('registos')?await views.training():views.restricted();
     else if(protectedPages[r.name])page=hasTab(r.name)?await protectedPages[r.name]():views.restricted();
     else page={html:`<section class="container page"><h1>Página não encontrada</h1>${empty('Este endereço não corresponde a uma secção do portal.')}<a class="button" href="#/">Voltar ao Início</a></section>`};
     if(seq!==renderSequence)return;
     main.innerHTML=page.html;cache=page.cache || {};
-    document.title=`${main.querySelector('h1')?.textContent || 'USHE'} · USHE Diamond`;
+    main.className=r.name?'route-content':'home-content';
+    document.title=r.name?`${main.querySelector('h1')?.textContent || 'USHE'} – USHE`:'USHE – Unidade de Segurança e Honras do Estado';
     views.filterPage(main);await hydrateImages(main);
     if(seq!==renderSequence)return;
     if(preserveScroll)window.scrollTo({top:scroll,behavior:'instant'});

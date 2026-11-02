@@ -245,6 +245,14 @@ $$;
 create function public.active_member_count() returns bigint language sql stable security definer set search_path = '' as $$
   select count(*) from public.members where active;
 $$;
+-- Só agregados públicos; os documentos e os participantes continuam privados.
+create function public.unit_statistics() returns jsonb language sql stable security definer set search_path = '' as $$
+  select jsonb_build_object(
+    'member_count',(select count(*) from public.members where active),
+    'rank_count',(select count(distinct rank) from public.members),
+    'training_count',(select count(*) from public.event_logs where event_type ilike 'trein%' or lower(event_type) in ('formação','formacao'))
+  );
+$$;
 -- Diretório mínimo para participantes/visados; não revela emails, cargos de conta ou outros dados.
 create function public.member_options() returns table(id uuid,name text,rank text,uniform_number integer) language sql stable security definer set search_path = '' as $$
   select m.id,m.name,m.rank,m.uniform_number from public.members m
@@ -309,8 +317,8 @@ begin
   return v_id;
 end; $$;
 
-revoke all on function public.home_announcements(),public.active_member_count() from public,anon,authenticated;
-grant execute on function public.home_announcements(),public.active_member_count() to anon,authenticated;
+revoke all on function public.home_announcements(),public.active_member_count(),public.unit_statistics() from public,anon,authenticated;
+grant execute on function public.home_announcements(),public.active_member_count(),public.unit_statistics() to anon,authenticated;
 revoke all on function public.member_options(),public.response_names(text,uuid),public.set_user_access(uuid,public.ushe_role,boolean,jsonb),public.save_warning(uuid,jsonb,uuid[]),public.save_log(uuid,jsonb,uuid[]) from public,anon,authenticated;
 grant execute on function public.member_options(),public.response_names(text,uuid),public.set_user_access(uuid,public.ushe_role,boolean,jsonb),public.save_warning(uuid,jsonb,uuid[]),public.save_log(uuid,jsonb,uuid[]) to authenticated;
 

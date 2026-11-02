@@ -34,7 +34,7 @@ function fieldHTML(spec,row) {
 }
 function defaults(table) {
   const start=lisbonInput(),end=lisbonInput(new Date(Date.now()+3600000).toISOString());
-  return {rank:'Operacional',active:true,kind:'Comunicado Oficial',author_name:`${state.profile?.full_name || 'Comando'} · Comando USHE`,created_at:new Date().toISOString(),published:true,allow_responses:false,title:table==='warnings'?'1ª REPREENSÃO ESCRITA':'',sanction:'1º Aviso',signature:'Cumprimentos, Duarte Petinga, Comandante USHE.',issued_on:start.slice(0,10),starts_at:lisbonISO(start),ends_at:lisbonISO(end),sort_order:0,category:'Obrigatório',event_type:'Ativação',notes:table==='uniforms'?'Pode ser completamente modificado':'',pieces_text:PIECES.map(k=>`${k} = `).join('\n')};
+  return {rank:'Operacional',active:true,kind:'Comunicado Oficial',author_name:`${state.profile?.full_name || 'Comando'} · Comando USHE`,created_at:new Date().toISOString(),published:true,allow_responses:false,title:table==='warnings'?'1ª REPREENSÃO ESCRITA':'',sanction:'1º Aviso',signature:'Cumprimentos, Duarte Petinga, Comandante USHE.',issued_on:start.slice(0,10),starts_at:lisbonISO(start),ends_at:lisbonISO(end),sort_order:0,category:'Obrigatório',event_type:location.hash.startsWith('#/treinamentos')?'Treino':'Ativação',notes:table==='uniforms'?'Pode ser completamente modificado':'',pieces_text:PIECES.map(k=>`${k} = `).join('\n')};
 }
 export async function openEditor(table,id,cache) {
   if(!fields[table])throw new Error('Formulário desconhecido.');
@@ -113,6 +113,7 @@ export async function deleteRecord(table,id,cache) {
   return true;
 }
 export async function submitAuth(form) {
+  if(!db)throw new Error('A área reservada ainda não foi ativada. Contacta o Comando para mais informações.');
   const fd=new FormData(form),mode=form.dataset.mode,email=String(fd.get('email')||'').trim(),password=String(fd.get('password')||'');
   const redirect=new URL('./',window.location.href);redirect.hash='/entrar';redirect.search='';
   if(['signup','password'].includes(mode)&&password!==fd.get('confirmation'))throw new Error('As palavras-passe não coincidem.');

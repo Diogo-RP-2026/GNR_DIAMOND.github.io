@@ -21,6 +21,7 @@ test('permissões, votos, documentos e fotografias são protegidos por PostgreSQ
     grant select,insert,update,delete on storage.objects to authenticated;`);
   await db.exec(await readFile(new URL('../supabase/01_schema.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('../supabase/02_seed.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('../supabase/04_estatisticas_publicas.sql',import.meta.url),'utf8'));
   for(const [name,id] of Object.entries(uid))await sql('insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3)',[id,`${name}@example.test`,JSON.stringify({full_name:name,role:'command',approved:true})]);
   await sql("update public.profiles set role='command',approved=true where id=$1",[uid.admin]);
   const event='e0000000-0000-4000-8000-000000000001';
@@ -28,6 +29,7 @@ test('permissões, votos, documentos e fotografias são protegidos por PostgreSQ
     await as('anon');
     assert.equal((await sql('select * from public.home_announcements()')).rows.length,2);
     assert.equal((await sql('select public.active_member_count() as n')).rows[0].n,22);
+    assert.deepEqual((await sql('select public.unit_statistics() as data')).rows[0].data,{member_count:22,rank_count:7,training_count:0});
     assert.equal((await sql('select * from public.contact_info')).rows.length,1);
     await assert.rejects(sql('select * from public.members'),/permission denied/);
     await assert.rejects(sql('select * from public.announcements'),/permission denied/);
@@ -106,6 +108,14 @@ test('permissões, votos, documentos e fotografias são protegidos por PostgreSQ
     assert.equal((await sql('select count(*) as n from public.warnings')).rows[0].n,before);
     await sql('select public.save_warning(null,$1,$2)',[doc,[member.id]]);
     assert.equal((await sql('select count(*) as n from public.warnings')).rows[0].n,Number(before)+1);
+  });
+  await t.test('estatísticas de treinos revelam apenas a contagem e mantêm os documentos privados',async()=>{
+    await as('authenticated',uid.admin);
+    await sql("insert into public.event_logs(event_type,starts_at,ends_at,location,summary) values('Treino','2026-11-03T10:00Z','2026-11-03T11:00Z','Quartel','Documento reservado')");
+    await as('anon');
+    const metrics=(await sql('select public.unit_statistics() as data')).rows[0].data;
+    assert.equal(metrics.training_count,1);assert.deepEqual(Object.keys(metrics).sort(),['member_count','rank_count','training_count']);
+    await assert.rejects(sql('select * from public.event_logs'),/permission denied/);
   });
   await db.close();
 });

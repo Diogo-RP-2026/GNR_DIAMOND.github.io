@@ -2,7 +2,7 @@
 
 Portal institucional da cidade Diamond em português de Portugal. HTML, CSS e JavaScript sem compilação, com Supabase para autenticação, Postgres e fotografias privadas. O alojamento dos ficheiros é feito no GitHub Pages.
 
-**Estado da entrega:** código e SQL completos. Antes de utilizar a área reservada, cria/configura o projeto Supabase, executa os três scripts indicados e preenche `config.js`. Sem essa ligação, Início e Contactos funcionam e a área reservada apresenta uma mensagem de preparação. Não existem contas de Comando automáticas nem palavras-passe de demonstração.
+**Estado da entrega:** código e SQL completos. Antes de utilizar a área reservada, cria/configura o projeto Supabase, executa os três scripts indicados e preenche `config.js`. Sem essa ligação, Início e Contactos funcionam; os formulários de entrada são apresentados e explicam que o acesso está por ativar se alguém tentar iniciar sessão. Não existem contas de Comando automáticas nem palavras-passe de demonstração.
 
 ## 1. Estrutura dos ficheiros
 
@@ -17,7 +17,10 @@ js/
   views.js                       Todas as páginas e cartões reutilizáveis
   forms.js                       Formulários de edição e administração
 images/
-  ushe-emblema.png                Brasão da unidade
+  ushe-brasao.png                 Brasão da referência
+  ushe-hero.jpg                   Fundo fotográfico da referência
+  ushe-emblema.png                Brasão da versão anterior, preservado
+fonts/                           Barlow e Barlow Condensed, com licenças OFL
 vendor/
   supabase.js                    Supabase JS 2.118.0, distribuição oficial local
   LICENSE-supabase               Licença MIT
@@ -26,6 +29,7 @@ supabase/
   01_schema.sql                  Tabelas, índices, relações, funções, RLS e Storage
   02_seed.sql                    Conteúdo inicial editável
   03_primeiro_comando.sql         Promoção da primeira conta de Comando
+  04_estatisticas_publicas.sql    Atualização para instalações já existentes
 tests/
   core.test.mjs                  Datas, pesquisa e tratamento de texto
   rls.test.mjs                   Políticas e transações em PostgreSQL/PGlite
@@ -114,7 +118,7 @@ As permissões ficam na base de dados, não no armazenamento local. Nenhum utili
 
 **Eventos:** os membros aprovados com a aba Eventos podem criar eventos e editar/apagar os que criaram. O Comando gere todos. Há título, descrição, início, fim e local. Os próximos/em curso aparecem primeiro; o arquivo aparece depois, do mais recente para o mais antigo. Cada conta tem uma resposta por evento (Vou/Não vou), pode mudá-la e vê contagens e nomes. Não existe limite artificial de respostas ou participantes; aplicam-se os recursos/quotas do serviço. As listas são atualizadas após votar, ao navegar e, com Eventos aberto, a cada 45 segundos.
 
-**Anúncios:** só o Comando escreve. Pode usar Evento, Reunião ou Comunicado Oficial, escolher autor/data, permitir respostas opcionais e guardar rascunhos. A página pública revela apenas os três últimos **títulos**, datas e a contagem de efetivos; não revela o corpo, os votos nem os perfis. Um título publicado é deliberadamente público.
+**Anúncios:** só o Comando escreve. Pode usar Evento, Reunião ou Comunicado Oficial, escolher autor/data, permitir respostas opcionais e guardar rascunhos. A página inicial segue a referência visual: fotografia escurecida, título e três estatísticas. O corpo dos anúncios, os votos e os perfis continuam reservados. A projeção SQL anterior dos três títulos públicos é preservada por compatibilidade.
 
 **Avisos:** seleção de um ou vários membros; título oficial, alíneas da conduta, sanção, data e assinatura. Filtros por membro, sanção e pesquisa. O selo de sanção é vermelho.
 
@@ -149,7 +153,7 @@ Para fazer alterações, substitui os ficheiros correspondentes e faz commit. O 
 | Elemento | Onde alterar |
 | --- | --- |
 | Cores, fontes, largura, bordas | Variáveis `:root` no início de `style.css` |
-| Brasão | Substituir `images/ushe-emblema.png` |
+| Brasão | Substituir `images/ushe-brasao.png` |
 | Ícone do separador | Substituir `favicon.ico` |
 | Título, apresentação, lema e recrutamento | Administração → Início e Contactos |
 | Convite do Discord | Administração → Início e Contactos → Convite Discord |
@@ -159,7 +163,7 @@ Para fazer alterações, substitui os ficheiros correspondentes e faz commit. O 
 | Anúncios, avisos, regulamento e registos | Páginas respetivas ou Administração |
 | URL e chave pública Supabase | `config.js` |
 
-Os três destaques de valores na página inicial são textos públicos em `js/views.js`; a identidade e os textos institucionais completos são editáveis no painel. Os nomes/ordem das abas e das patentes encontram-se em `js/core.js`. Adicionar novas abas requer também atualizar o enum e as políticas SQL.
+A página inicial e Contactos reproduzem a referência fornecida. O fundo é `images/ushe-hero.jpg`; as fontes são servidas da pasta `fonts/`. O título e os textos de apresentação/contactos continuam editáveis no painel. O lema é preservado no conteúdo acessível do cabeçalho e do rodapé, sem adicionar texto visível à composição da referência. Os nomes/ordem das abas e das patentes encontram-se em `js/core.js`. Adicionar novas abas requer também atualizar o enum e as políticas SQL.
 
 ## 8. Testes opcionais
 
@@ -180,9 +184,22 @@ Os testes executam as tabelas e políticas num PostgreSQL local em WASM (PGlite)
 - Uniform-02 é Diogo Oconner; João Barbosa está em Primeiro Oficial, conforme a equipa indicada. Não inventámos o nome oculto na captura do comunicado.
 - Os indicativos não visíveis ficam em branco, editáveis pelo Comando.
 - O exemplo Ocean Vibe é de **23/10/2026**, uma sexta-feira. Está no arquivo se já terminou. O fim às 23:00 é exemplificativo e assinalado na descrição.
-- Não foi fornecido um convite Discord nem fotografias individuais recortadas dos fardamentos. O convite fica vazio e existem espaços para upload das fotografias. O brasão do projeto existente foi preservado.
+- O convite Discord continua editável. Na sua ausência, os botões abrem `https://discord.com`, como na referência; não existe um convite fictício para a cidade Diamond. Fotografias de fardamento continuam disponíveis por upload. O fundo e o brasão do site de referência foram integrados; o brasão anterior também foi conservado.
 - As capturas e o regulamento incompleto são referências; os textos e as regras do pedido atual prevalecem.
 - Não existe migração automática de perfis/votos locais: esses perfis nunca comprovaram a identidade das pessoas.
+
+## Atualização visual a partir da referência
+
+Referência indicada pelo utilizador: https://pixel-perfect-recreation-506.lovable.app/ . A reconstrução usa HTML/CSS/JS próprios; não depende do projeto Lovable nem inclui o seu selo de edição.
+
+- Início: mesma fotografia, brasão, fontes Barlow, título, cores, degradé e cartões de estatísticas.
+- Contactos: cartão central com Abrir Ticket e DM ao Comando.
+- Entrar: formulário central e ligação de criação de conta; mantêm-se os modos de recuperação e as validações existentes.
+- As áreas internas continuam protegidas pelas permissões anteriores e usam o mesmo tema. A referência não permite consultar essas áreas sem uma conta aprovada; não se afirma equivalência com páginas privadas não observadas.
+- O cartão Treinamentos abre `#/treinamentos`. Sem sessão, encaminha para Entrar; com sessão, exige acesso a Registos. Os treinos são registos de tipo iniciado por `Trein` ou do tipo `Formação`/`Formacao`.
+- As estatísticas vêm da função `unit_statistics()`, que divulga apenas contagens. Se já tinhas instalado o SQL anterior, executa **apenas** `supabase/04_estatisticas_publicas.sql`. Em instalações novas, a função já faz parte de `01_schema.sql`.
+- Sem configuração Supabase, a apresentação inicial usa os dados fornecidos: **22 efetivos, 7 cargos e 0 treinamentos**. Quando o Supabase está configurado, os valores vêm da base de dados; uma falha de ligação não é apresentada como uma contagem real.
+- O favicon, a autenticação, os documentos, os votos e as permissões existentes foram preservados. A nova aparência não cria sessões nem atribui novos acessos.
 
 ## Referências técnicas
 

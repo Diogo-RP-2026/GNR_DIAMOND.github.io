@@ -3,9 +3,9 @@
 begin;
 insert into public.contact_info(id,hero_title,hero_intro,recruitment,contact_text,discord_url,motto) values
 (1,'Unidade de Segurança e Honras do Estado',
-'Ao serviço da cidade Diamond. Protegemos as instituições, asseguramos a ordem e honramos o Estado com disciplina e sentido de missão.',
-'Queres servir na USHE? Contacta o Comando no Discord da cidade Diamond para conhecer os requisitos e o próximo período de recrutamento.',
-'Para assuntos institucionais, candidaturas ou esclarecimentos, procura o Comando da USHE nos canais oficiais da cidade Diamond. O convite para o Discord será disponibilizado pelo Comando.',
+'Disciplina, lealdade e honra ao serviço do Estado.',
+'Dúvidas sobre cargos, progressão ou candidaturas.',
+'Diogo Oconner ou Duarte Petinga.',
 '','Honra, Disciplina e Excelência') on conflict do nothing;
 insert into public.institutional_content(id,title,body,mission,values_text) values
 (1,'Uma unidade. Um compromisso.',

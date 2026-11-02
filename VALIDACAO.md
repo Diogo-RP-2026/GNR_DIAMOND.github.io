@@ -20,7 +20,7 @@
 
 ## Limites
 
-Não foi fornecido um projeto Supabase configurado nem as suas chaves públicas. Não foram criadas contas reais, executado SQL num serviço de produção, enviados emails, validados os limites do serviço ou carregadas fotografias num bucket real. Os formulários internos foram verificados com dados sintéticos; essa verificação não substitui um teste final da integração Auth/PostgREST/Storage depois da configuração.
+A instalação e a integração pública já foram verificadas num projeto Supabase real, incluindo SQL, RLS e consultas anónimas. Ainda não foram criadas contas Auth reais, enviados emails, validados os limites do serviço ou carregadas fotografias num bucket real. Os formulários internos foram verificados com dados sintéticos; falta a verificação final da integração autenticada Auth/PostgREST/Storage, depois de o utilizador criar a primeira conta e configurar o fornecedor SMTP.
 
 O portal não apresenta uma sessão de demonstração em produção e não concede Comando à primeira conta. Os ficheiros de teste usados na pré-visualização não integram o site nem o ZIP.
 
@@ -38,4 +38,6 @@ O esquema e o seed foram aplicados ao projeto `GNR_DIAMOND.github.io` (plano Fre
 
 As rotinas privilegiadas foram colocadas no esquema privado; as funções públicas de acesso são `SECURITY INVOKER`. A nova verificação de segurança do Supabase terminou sem avisos. Os 17 testes automáticos continuaram a passar. A API real devolveu HTTP 200 para estatísticas/contactos e HTTP 401 para pedidos anónimos a membros, perfis e anúncios. Autenticação por email e registos de contas estão ativos, com confirmação de email obrigatória.
 
-Ainda não existiam contas Auth no momento da instalação. A criação da primeira conta e a sua promoção a Comando requerem a identificação do email pretendido e a escolha privada da palavra-passe pelo utilizador. As mensagens de confirmação/recuperação e o login completo serão verificados depois dessa etapa e da configuração dos endereços de autenticação.
+O painel confirmou a gravação do Site URL `https://diogo-rp-2026.github.io/GNR_DIAMOND.github.io/` e de dois Redirect URLs exatos: esse endereço e a variante com `#/entrar`. Não foram adicionados wildcards ou endereços de desenvolvimento.
+
+Continuam a existir zero contas Auth e zero contas Comando. A criação da primeira conta e a sua promoção a Comando requerem a identificação do email pretendido e a escolha privada da palavra-passe pelo utilizador. O painel confirmou que o SMTP personalizado está desativado; falta configurar um fornecedor de envio antes de testar confirmações/recuperação para todos os membros. O login completo e as operações autenticadas serão verificados depois de existir uma conta real.

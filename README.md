@@ -2,7 +2,7 @@
 
 Portal institucional da cidade Diamond em português de Portugal. HTML, CSS e JavaScript sem compilação, com Supabase para autenticação, Postgres e fotografias privadas. O alojamento dos ficheiros é feito no GitHub Pages.
 
-**Estado da instalação:** o esquema, os conteúdos iniciais, as políticas RLS e o bucket privado foram instalados no projeto Supabase `GNR_DIAMOND.github.io`. A URL e a chave pública estão configuradas em `config.js`. A primeira conta de Comando tem de ser uma conta Auth real: cria a tua conta e promove o email correto com `03_primeiro_comando.sql`. A confirmação de email e a recuperação exigem que o endereço GitHub Pages esteja autorizado em Authentication → URL Configuration. Os passos abaixo também permitem reinstalar o portal num projeto novo.
+**Estado da instalação:** o esquema, os conteúdos iniciais, as políticas RLS e o bucket privado foram instalados no projeto Supabase `GNR_DIAMOND.github.io`. A URL e a chave pública estão configuradas em `config.js`. O endereço GitHub Pages e os dois redirecionamentos de produção já estão guardados em Authentication → URL Configuration. Falta criar a primeira conta Auth e promover o email escolhido a Comando com `03_primeiro_comando.sql`. O envio de emails usa ainda o serviço padrão do Supabase; falta configurar um fornecedor SMTP para utilização regular pelos membros. Os passos abaixo também permitem reinstalar o portal num projeto novo.
 
 As funções privilegiadas ficam no esquema `private`; a API pública usa funções `SECURITY INVOKER` que chamam apenas as operações explicitamente autorizadas. As verificações reais da API confirmaram que visitantes leem estatísticas e contactos, mas não os membros, perfis ou corpos dos anúncios.
 
@@ -78,8 +78,9 @@ Alternativa no VS Code: abre a pasta e usa a extensão Live Server. O Node.js e 
 6. Em **Storage**, confirma o bucket privado `ushe-media`, criado pelo SQL. Aceita JPG, PNG e WebP, até 5 MB por ficheiro. Não o tornes público.
 7. Em **Authentication → Providers / Sign In**, ativa email/palavra-passe e a confirmação de email. Para utilização regular, configura o envio de emails em Authentication/SMTP; os envios do serviço de demonstração podem ter restrições. Ajusta os limites de email e proteção contra abuso às necessidades do servidor.
 8. Em **Authentication → URL Configuration**, define:
-   - Site URL: o endereço completo do teu GitHub Pages, incluindo `/GNR_DIAMOND.github.io/`.
-   - Redirect URLs: `http://localhost:8000/` para desenvolvimento e o mesmo endereço completo do Pages para produção. Se usares outro porto no Live Server, adiciona também esse endereço exato.
+   - Site URL: `https://diogo-rp-2026.github.io/GNR_DIAMOND.github.io/`.
+   - Redirect URLs de produção: `https://diogo-rp-2026.github.io/GNR_DIAMOND.github.io/` e `https://diogo-rp-2026.github.io/GNR_DIAMOND.github.io/#/entrar`. Usa endereços exatos, sem wildcards.
+   - Para testar localmente, adiciona também `http://localhost:8000/` e `http://localhost:8000/#/entrar`. Estes endereços de desenvolvimento não foram adicionados ao projeto de produção. Se usares outro porto no Live Server, autoriza os endereços correspondentes.
    - Os links de confirmação/recuperação usam esse endereço com `#/entrar`. O fragmento identifica a página do portal; não precisa de regras de reencaminhamento no servidor.
 9. Abre o diálogo **Connect**, ou **Settings → API Keys**, e copia a URL do projeto e a **publishable key** (`sb_publishable_...`). Uma `anon` key legada também é aceite.
 10. Edita `config.js`:

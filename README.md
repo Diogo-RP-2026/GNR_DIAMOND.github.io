@@ -2,7 +2,9 @@
 
 Portal institucional da cidade Diamond em português de Portugal. HTML, CSS e JavaScript sem compilação, com Supabase para autenticação, Postgres e fotografias privadas. O alojamento dos ficheiros é feito no GitHub Pages.
 
-**Estado da entrega:** código e SQL completos. Antes de utilizar a área reservada, cria/configura o projeto Supabase, executa os três scripts indicados e preenche `config.js`. Sem essa ligação, Início e Contactos funcionam; os formulários de entrada são apresentados e explicam que o acesso está por ativar se alguém tentar iniciar sessão. Não existem contas de Comando automáticas nem palavras-passe de demonstração.
+**Estado da instalação:** o esquema, os conteúdos iniciais, as políticas RLS e o bucket privado foram instalados no projeto Supabase `GNR_DIAMOND.github.io`. A URL e a chave pública estão configuradas em `config.js`. A primeira conta de Comando tem de ser uma conta Auth real: cria a tua conta e promove o email correto com `03_primeiro_comando.sql`. A confirmação de email e a recuperação exigem que o endereço GitHub Pages esteja autorizado em Authentication → URL Configuration. Os passos abaixo também permitem reinstalar o portal num projeto novo.
+
+As funções privilegiadas ficam no esquema `private`; a API pública usa funções `SECURITY INVOKER` que chamam apenas as operações explicitamente autorizadas. As verificações reais da API confirmaram que visitantes leem estatísticas e contactos, mas não os membros, perfis ou corpos dos anúncios.
 
 ## 1. Estrutura dos ficheiros
 

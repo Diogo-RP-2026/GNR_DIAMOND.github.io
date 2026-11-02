@@ -31,6 +31,8 @@ test('permissões, votos, documentos e fotografias são protegidos por PostgreSQ
     assert.equal((await sql('select public.active_member_count() as n')).rows[0].n,22);
     assert.deepEqual((await sql('select public.unit_statistics() as data')).rows[0].data,{member_count:22,rank_count:7,training_count:0});
     assert.equal((await sql('select * from public.contact_info')).rows.length,1);
+    assert.equal((await sql("select count(*) as n from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prosecdef")).rows[0].n,0);
+    assert.equal((await sql("select has_function_privilege('anon','private.set_user_access(uuid,public.ushe_role,boolean,jsonb)','execute') as allowed")).rows[0].allowed,false);
     await assert.rejects(sql('select * from public.members'),/permission denied/);
     await assert.rejects(sql('select * from public.announcements'),/permission denied/);
     await assert.rejects(sql('select public.member_options()'),/permission denied/);

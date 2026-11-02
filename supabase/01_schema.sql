@@ -239,14 +239,14 @@ create policy log_participants_insert on public.event_log_participants for inser
 create policy log_participants_delete on public.event_log_participants for delete to authenticated using ((select private.is_command()));
 
 -- Projeções limitadas: visitantes não recebem os corpos dos anúncios nem os perfis.
-create function public.home_announcements() returns table(id uuid,title text,created_at timestamptz) language sql stable security definer set search_path = '' as $$
+create function private.home_announcements() returns table(id uuid,title text,created_at timestamptz) language sql stable security definer set search_path = '' as $$
   select a.id,a.title,a.created_at from public.announcements a where a.published order by a.created_at desc limit 3;
 $$;
-create function public.active_member_count() returns bigint language sql stable security definer set search_path = '' as $$
+create function private.active_member_count() returns bigint language sql stable security definer set search_path = '' as $$
   select count(*) from public.members where active;
 $$;
 -- Só agregados públicos; os documentos e os participantes continuam privados.
-create function public.unit_statistics() returns jsonb language sql stable security definer set search_path = '' as $$
+create function private.unit_statistics() returns jsonb language sql stable security definer set search_path = '' as $$
   select jsonb_build_object(
     'member_count',(select count(*) from public.members where active),
     'rank_count',(select count(distinct rank) from public.members),
@@ -254,11 +254,11 @@ create function public.unit_statistics() returns jsonb language sql stable secur
   );
 $$;
 -- Diretório mínimo para participantes/visados; não revela emails, cargos de conta ou outros dados.
-create function public.member_options() returns table(id uuid,name text,rank text,uniform_number integer) language sql stable security definer set search_path = '' as $$
+create function private.member_options() returns table(id uuid,name text,rank text,uniform_number integer) language sql stable security definer set search_path = '' as $$
   select m.id,m.name,m.rank,m.uniform_number from public.members m
   where private.has_tab('equipa') or private.has_tab('registos') or private.has_tab('avisos') order by m.uniform_number;
 $$;
-create function public.response_names(p_kind text,p_id uuid) returns table(user_id uuid,full_name text,attending boolean) language plpgsql stable security definer set search_path = '' as $$
+create function private.response_names(p_kind text,p_id uuid) returns table(user_id uuid,full_name text,attending boolean) language plpgsql stable security definer set search_path = '' as $$
 begin
   if p_kind='event' and private.has_tab('eventos') then
     return query select r.user_id,p.full_name,r.attending from public.event_responses r join public.profiles p on p.id=r.user_id where r.event_id=p_id order by p.full_name,p.id;
@@ -268,7 +268,7 @@ begin
 end; $$;
 
 -- Uma só transação para cargo, aprovação e permissões. Protege o último Comando.
-create function public.set_user_access(p_user uuid,p_role public.ushe_role,p_approved boolean,p_tabs jsonb) returns void language plpgsql security definer set search_path = '' as $$
+create function private.set_user_access(p_user uuid,p_role public.ushe_role,p_approved boolean,p_tabs jsonb) returns void language plpgsql security definer set search_path = '' as $$
 declare item jsonb;
 begin
   perform pg_advisory_xact_lock(786533);
@@ -316,6 +316,19 @@ begin
   insert into public.event_log_participants(log_id,member_id) select v_id,unnest(p_members);
   return v_id;
 end; $$;
+
+
+-- A API expõe funções sem privilégios acrescidos; as operações privilegiadas ficam no esquema privado.
+create function public.home_announcements() returns table(id uuid,title text,created_at timestamptz) language sql stable security invoker set search_path = '' as $$ select * from private.home_announcements(); $$;
+create function public.active_member_count() returns bigint language sql stable security invoker set search_path = '' as $$ select private.active_member_count(); $$;
+create function public.unit_statistics() returns jsonb language sql stable security invoker set search_path = '' as $$ select private.unit_statistics(); $$;
+create function public.member_options() returns table(id uuid,name text,rank text,uniform_number integer) language sql stable security invoker set search_path = '' as $$ select * from private.member_options(); $$;
+create function public.response_names(p_kind text,p_id uuid) returns table(user_id uuid,full_name text,attending boolean) language sql stable security invoker set search_path = '' as $$ select * from private.response_names(p_kind,p_id); $$;
+create function public.set_user_access(p_user uuid,p_role public.ushe_role,p_approved boolean,p_tabs jsonb) returns void language sql volatile security invoker set search_path = '' as $$ select private.set_user_access(p_user,p_role,p_approved,p_tabs); $$;
+revoke all on function private.home_announcements(),private.active_member_count(),private.unit_statistics(),private.member_options(),private.response_names(text,uuid),private.set_user_access(uuid,public.ushe_role,boolean,jsonb) from public,anon,authenticated;
+grant usage on schema private to anon,authenticated;
+grant execute on function private.home_announcements(),private.active_member_count(),private.unit_statistics() to anon,authenticated;
+grant execute on function private.member_options(),private.response_names(text,uuid),private.set_user_access(uuid,public.ushe_role,boolean,jsonb) to authenticated;
 
 revoke all on function public.home_announcements(),public.active_member_count(),public.unit_statistics() from public,anon,authenticated;
 grant execute on function public.home_announcements(),public.active_member_count(),public.unit_statistics() to anon,authenticated;

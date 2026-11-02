@@ -31,3 +31,11 @@ Para a verificação final da instalação, cria uma conta Comando e uma conta m
 A aparência pública foi reconstruída a partir de `pixel-perfect-recreation-506.lovable.app`, com os mesmos recursos de fundo e brasão e as famílias Barlow / Barlow Condensed servidas localmente. A comparação de Início confirmou as mesmas dimensões principais no mesmo navegador: cabeçalho de 73 px, destaque de 424 px e cartões de 144 px. Contactos e Entrar também foram comparados. As áreas privadas da referência exigem conta aprovada e não foram consultadas. O tema foi aplicado às funcionalidades internas existentes.
 
 Foi acrescentado um teste PostgreSQL para confirmar que a estatística de treinamentos divulga apenas contagens e não permite a visitantes ler os documentos. Os 17 testes passaram.
+
+## Instalação real no Supabase — 2 de novembro de 2026
+
+O esquema e o seed foram aplicados ao projeto `GNR_DIAMOND.github.io` (plano Free). Foram confirmados 22 membros, 2 anúncios, 1 evento, 1 aviso, 2 categorias de fardamento, 10 itens de equipamento e 5 artigos. Todas as tabelas têm RLS ativa e o bucket `ushe-media` é privado, limitado a JPG/PNG/WebP até 5 MB.
+
+As rotinas privilegiadas foram colocadas no esquema privado; as funções públicas de acesso são `SECURITY INVOKER`. A nova verificação de segurança do Supabase terminou sem avisos. Os 17 testes automáticos continuaram a passar. A API real devolveu HTTP 200 para estatísticas/contactos e HTTP 401 para pedidos anónimos a membros, perfis e anúncios. Autenticação por email e registos de contas estão ativos, com confirmação de email obrigatória.
+
+Ainda não existiam contas Auth no momento da instalação. A criação da primeira conta e a sua promoção a Comando requerem a identificação do email pretendido e a escolha privada da palavra-passe pelo utilizador. As mensagens de confirmação/recuperação e o login completo serão verificados depois dessa etapa e da configuração dos endereços de autenticação.

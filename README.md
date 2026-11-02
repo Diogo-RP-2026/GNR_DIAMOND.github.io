@@ -1,137 +1,194 @@
-# USHE — GitHub Pages
+# USHE — Unidade de Segurança e Honras do Estado
 
-Site estático pronto para enviar diretamente para um repositório do GitHub. Não é preciso instalar programas, executar npm, compilar o projeto, configurar chaves ou ligar um serviço de dados.
+Portal institucional da cidade Diamond em português de Portugal. HTML, CSS e JavaScript sem compilação, com Supabase para autenticação, Postgres e fotografias privadas. O alojamento dos ficheiros é feito no GitHub Pages.
 
-Esta versão utiliza apenas HTML, CSS, JavaScript e imagens. Foram retirados SQL, Supabase, autenticação remota, código de servidor e todas as dependências do projeto anterior.
+**Estado da entrega:** código e SQL completos. Antes de utilizar a área reservada, cria/configura o projeto Supabase, executa os três scripts indicados e preenche `config.js`. Sem essa ligação, Início e Contactos funcionam e a área reservada apresenta uma mensagem de preparação. Não existem contas de Comando automáticas nem palavras-passe de demonstração.
 
-## Atenção ao funcionamento dos dados
+## 1. Estrutura dos ficheiros
 
-**Os perfis, eventos, votos, permissões e edições são locais ao navegador. Não existe sincronização entre pessoas ou computadores.**
+```text
+index.html                       Estrutura do portal
+style.css                        Identidade visual e responsividade
+script.js                        Navegação, sessões e ações da interface
+config.js                        URL e chave pública do Supabase
+js/
+  api.js                         Cliente Supabase, permissões e fotografias
+  core.js                        Datas, pesquisa, apresentação e segurança de texto
+  views.js                       Todas as páginas e cartões reutilizáveis
+  forms.js                       Formulários de edição e administração
+images/
+  ushe-emblema.png                Brasão da unidade
+vendor/
+  supabase.js                    Supabase JS 2.118.0, distribuição oficial local
+  LICENSE-supabase               Licença MIT
+  README.md                      Origem e versão da dependência
+supabase/
+  01_schema.sql                  Tabelas, índices, relações, funções, RLS e Storage
+  02_seed.sql                    Conteúdo inicial editável
+  03_primeiro_comando.sql         Promoção da primeira conta de Comando
+tests/
+  core.test.mjs                  Datas, pesquisa e tratamento de texto
+  rls.test.mjs                   Políticas e transações em PostgreSQL/PGlite
+favicon.ico
+.nojekyll
+.gitignore
+robots.txt
+package.json / package-lock.json Apenas dependências dos testes
+README.md
+MIGRACAO.md
+VALIDACAO.md
+```
 
-Se criares um evento no teu PC, outra pessoa que abra o site no seu PC não o verá. Um perfil local também não comprova a identidade de uma pessoa: qualquer pessoa com acesso ao mesmo navegador pode selecionar outro perfil.
+## 2. Correr no computador
 
-As preferências de cargo e visibilidade organizam a interface; **não oferecem autenticação, autorização ou confidencialidade reais**. Todos os ficheiros enviados para o site, incluindo os textos em `conteudo.js`, podem ser lidos pelos visitantes. Ocultar uma página no menu não torna esses textos privados.
+Não abras apenas o HTML com duplo clique: os módulos JavaScript precisam de um servidor HTTP.
 
-Este comportamento é apresentado no próprio site. É o resultado da opção de usar exclusivamente GitHub Pages, sem qualquer serviço de dados ou autenticação.
+1. Extrai o ZIP para uma pasta.
+2. Abre um terminal nessa pasta (a que contém `index.html`).
+3. No Windows com Python instalado, executa:
 
-## Ficheiros
+```powershell
+py -m http.server 8000
+```
 
-| Ficheiro ou pasta | Função |
+Em Linux/macOS:
+
+```bash
+python3 -m http.server 8000
+```
+
+4. Abre **http://localhost:8000/** no navegador.
+5. Para parar o servidor, usa `Ctrl + C`.
+
+Alternativa no VS Code: abre a pasta e usa a extensão Live Server. O Node.js e o npm **não são necessários para servir ou publicar o portal**; são usados apenas nos testes opcionais.
+
+## 3. Criar o projeto Supabase
+
+1. Entra em https://supabase.com/dashboard e cria um projeto para a USHE. Escolhe a região e guarda a palavra-passe da base de dados fora do repositório.
+2. Espera que o projeto fique disponível e abre **SQL Editor → New query**.
+3. Copia o ficheiro `supabase/01_schema.sql` completo e executa-o. Destina-se a um projeto novo; é uma migração de execução única e uma falha faz rollback da transação. Não apaga tabelas de outra aplicação. Se já tens outro esquema de USHE, usa um projeto novo ou prepara uma migração específica.
+4. Executa `supabase/02_seed.sql`. Cria os membros, exemplos das capturas, códigos e textos. Pode ser repetido sem substituir os registos iniciais que entretanto editaste.
+5. Em **Data API / API settings**, confirma que a Data API está ativa e o esquema `public` está exposto. Mantém o esquema `private` fora dos esquemas expostos. Os scripts atribuem os privilégios necessários e ativam RLS nas tabelas.
+6. Em **Storage**, confirma o bucket privado `ushe-media`, criado pelo SQL. Aceita JPG, PNG e WebP, até 5 MB por ficheiro. Não o tornes público.
+7. Em **Authentication → Providers / Sign In**, ativa email/palavra-passe e a confirmação de email. Para utilização regular, configura o envio de emails em Authentication/SMTP; os envios do serviço de demonstração podem ter restrições. Ajusta os limites de email e proteção contra abuso às necessidades do servidor.
+8. Em **Authentication → URL Configuration**, define:
+   - Site URL: o endereço completo do teu GitHub Pages, incluindo `/GNR_DIAMOND.github.io/`.
+   - Redirect URLs: `http://localhost:8000/` para desenvolvimento e o mesmo endereço completo do Pages para produção. Se usares outro porto no Live Server, adiciona também esse endereço exato.
+   - Os links de confirmação/recuperação usam esse endereço com `#/entrar`. O fragmento identifica a página do portal; não precisa de regras de reencaminhamento no servidor.
+9. Abre o diálogo **Connect**, ou **Settings → API Keys**, e copia a URL do projeto e a **publishable key** (`sb_publishable_...`). Uma `anon` key legada também é aceite.
+10. Edita `config.js`:
+
+```javascript
+window.USHE_CONFIG = Object.freeze({
+  supabaseUrl: 'https://O-TEU-PROJETO.supabase.co',
+  supabasePublishableKey: 'sb_publishable_A-TUA-CHAVE-PUBLICA',
+});
+```
+
+Só estes dois valores públicos vão para o navegador. **Nunca coloques uma secret key, `service_role`, palavra-passe ou token de administração no GitHub ou em `config.js`.** A chave pública identifica o projeto; as políticas RLS validam o utilizador e os seus acessos em cada pedido.
+
+## 4. Criar o primeiro Comando
+
+1. No portal, usa **Entrar → Pedir acesso**, regista uma conta e confirma o email. Alternativamente, cria-a em **Authentication → Users → Add user** no Supabase.
+2. Abre `supabase/03_primeiro_comando.sql` e substitui `SUBSTITUIR_PELO_EMAIL_DO_COMANDO` pelo email dessa conta.
+3. Executa esse script no SQL Editor do Supabase, como proprietário do projeto.
+4. Entra no portal com a conta. O menu apresenta todas as secções e **Administração**.
+5. Vai a **Administração → Utilizadores e acessos** para aprovar as contas seguintes e atribuir as respetivas abas.
+
+O script promove uma conta real criada pelo serviço Auth. Não manipula manualmente palavras-passe, identidades ou sessões em `auth.users`. O número de uniforme de um membro da Equipa é independente da conta de login e não lhe concede privilégios.
+
+## 5. Acessos e funcionamento
+
+| Pessoa | Acesso |
 | --- | --- |
-| `index.html` | Página inicial e estrutura do portal |
-| `style.css` | Aspeto, cores, formulários e adaptação ao ecrã |
-| `script.js` | Navegação, perfis, eventos, votos, editor e dados locais |
-| `conteudo.js` | Textos públicos iniciais, hierarquia, emblema e nomes do menu |
-| `images/` | Imagens, incluindo o emblema original |
-| `favicon.ico` | Ícone do separador |
-| `robots.txt` | Indicações básicas aos motores de pesquisa |
-| `.nojekyll` | Desativa o processamento Jekyll |
-| `README.md` | Este guia |
-| `MIGRACAO.md` | Alterações face ao ZIP original |
-| `VALIDACAO.md` | Verificações realizadas e limites da validação |
+| Visitante | Início e Contactos. Formulários de entrada/registo/recuperação disponíveis. |
+| Conta por aprovar | O mesmo conteúdo público e o estado do seu pedido. |
+| Membro aprovado | Apenas as abas atribuídas pelo Comando. |
+| Comando aprovado | Todas as abas, conteúdos e administração. |
 
-O ZIP tem `index.html` diretamente na raiz. **Extrai o ZIP e envia os ficheiros extraídos; não envies apenas o ZIP.** Não coloques tudo dentro de uma pasta adicional se publicares a raiz do repositório.
+Em **Gerir acessos** podes aprovar/suspender a conta, escolher Membro ou Comando e ativar/desativar cada aba individualmente. A caixa **Permitir criar registos** só tem efeito com a aba Registos autorizada. A leitura dos registos não implica autorização para os criar.
 
-## Publicar no GitHub Pages
+As permissões ficam na base de dados, não no armazenamento local. Nenhum utilizador se aprova ou promove a si próprio através da API. A interface revalida os acessos ao navegar e periodicamente; a RLS aplica-os imediatamente em cada consulta/gravação. Fotografias já descarregadas não podem ser retiradas da memória de quem já as viu.
 
-1. Extrai o ZIP no teu computador.
-2. Cria um repositório no GitHub ou abre o repositório que vais usar. No plano GitHub Free, usa um repositório público.
-3. Em **Add file → Upload files**, envia o conteúdo extraído, incluindo a pasta `images/`. Confirma que `index.html`, `style.css`, `script.js` e `conteudo.js` aparecem juntos na raiz. Guarda com **Commit changes**.
-4. Abre **Settings → Pages**.
-5. Em **Build and deployment → Source**, escolhe **Deploy from a branch**.
-6. Em **Branch**, escolhe a branch para onde enviaste os ficheiros, normalmente **main**, e a pasta **/(root)**. Clica em **Save**.
-7. Aguarda a publicação e abre o endereço mostrado nessa página.
+**Equipa e conteúdo institucional:** só o Comando cria, edita e apaga. Os membros podem ser marcados como inativos. Se um membro estiver associado a documentos, a base de dados impede apagá-lo para preservar o histórico; usa o estado inativo.
 
-O projeto funciona tanto em `utilizador.github.io` como em `utilizador.github.io/nome-do-repositorio/`. Não tens de escrever o nome do teu repositório no código: os recursos usam caminhos relativos.
+**Eventos:** os membros aprovados com a aba Eventos podem criar eventos e editar/apagar os que criaram. O Comando gere todos. Há título, descrição, início, fim e local. Os próximos/em curso aparecem primeiro; o arquivo aparece depois, do mais recente para o mais antigo. Cada conta tem uma resposta por evento (Vou/Não vou), pode mudá-la e vê contagens e nomes. Não existe limite artificial de respostas ou participantes; aplicam-se os recursos/quotas do serviço. As listas são atualizadas após votar, ao navegar e, com Eventos aberto, a cada 45 segundos.
 
-Não é necessário adicionar um workflow próprio. O GitHub pode mostrar a execução automática de publicação do Pages no separador Actions; isso é normal mesmo usando «Deploy from a branch».
+**Anúncios:** só o Comando escreve. Pode usar Evento, Reunião ou Comunicado Oficial, escolher autor/data, permitir respostas opcionais e guardar rascunhos. A página pública revela apenas os três últimos **títulos**, datas e a contagem de efetivos; não revela o corpo, os votos nem os perfis. Um título publicado é deliberadamente público.
 
-### Se já tinhas enviado o projeto antigo
+**Avisos:** seleção de um ou vários membros; título oficial, alíneas da conduta, sanção, data e assinatura. Filtros por membro, sanção e pesquisa. O selo de sanção é vermelho.
 
-1. Guarda uma cópia do repositório antigo ou cria uma branch de segurança antes de o substituir.
-2. Na branch que vais publicar, substitui o conteúdo do projeto antigo pelo conteúdo deste ZIP. O histórico do Git mantém os commits anteriores; não é necessário apagá-lo nem forçar envios.
-3. Remove o workflow antigo **`.github/workflows/pages.yml`**, que instalava e compilava o projeto anterior. Se existirem outros workflows desse projeto, verifica se ainda são necessários.
-4. As pastas antigas `src/`, `pages/`, `public/`, `scripts/` e `supabase/`, assim como os ficheiros de configuração, dependências e ambiente, deixam de fazer parte desta versão. Não mistures as duas versões.
-5. Altera a definição do Pages para **Deploy from a branch → main → /(root)**, ou para a branch que estiveres a usar. O workflow anterior não deve continuar responsável pela publicação.
-6. Confirma a publicação e recarrega o site. Se o navegador mostrar ficheiros antigos, usa **Ctrl + F5**.
+**Fardamento:** categorias livres, códigos copiáveis, nota editável e upload de fotografias. Cada linha do formulário usa `Peça = código`, por exemplo `T-Shirt = 192-3`. Usa `N/A` se não se aplicar. Podes adicionar novas peças e categorias.
 
-Num repositório que também contenha outros trabalhos, substitui apenas os ficheiros deste projeto. Conserva qualquer `CNAME` que já uses para um domínio personalizado e quaisquer ficheiros de licença de que precises.
+**Equipamento:** categorias livres, notas, ordem, fotografias e indicação obrigatório/opcional. Não é necessário editar código para adicionar categorias.
 
-## Navegação
+**Regulamento:** artigos por capítulo, índice e pesquisa. O conteúdo inicial é um **modelo a validar pelo Comando**, pois a captura não mostra os artigos.
 
-As páginas usam o fragmento `#` do endereço:
+**Registos:** tipo livre, início/fim, local, participantes, resumo e observações, com filtros por data e tipo. A gravação do documento e dos participantes é uma única transação. Depois de submetidos, apenas o Comando corrige ou apaga registos. Registos hospitalares referem-se ao roleplay da cidade Diamond.
 
-| Página | Final do endereço |
+As datas usam **Europe/Lisbon** em qualquer computador. O fim pode ser no dia seguinte mas tem de ser posterior ao início. Horas inexistentes na mudança para a hora de verão são recusadas; na hora repetida de outono é usada a primeira ocorrência.
+
+O Comando gere acesso e cargos das contas existentes; a eliminação definitiva de contas Auth e os convites administrativos por email são feitos no painel Supabase, sem colocar segredos no browser. O portal não envia mensagens no Discord.
+
+## 6. Publicar/atualizar no GitHub Pages
+
+1. Coloca os ficheiros e pastas na raiz do repositório **Diogo-RP-2026/GNR_DIAMOND.github.io**. O `index.html` fica diretamente na raiz, sem uma pasta adicional.
+2. Se estiveres a usar a versão antiga, lê `MIGRACAO.md`. O antigo `conteudo.js` deixa de ser usado.
+3. No GitHub abre **Settings → Pages → Build and deployment**.
+4. Escolhe **Deploy from a branch → main → /(root) → Save**.
+5. Aguarda a publicação automática e abre o endereço indicado no GitHub. O endereço de projeto segue a forma `https://diogo-rp-2026.github.io/GNR_DIAMOND.github.io/`.
+6. Ativa **Enforce HTTPS**, quando disponível nas definições do Pages.
+7. Confirma que o mesmo endereço está autorizado nas Redirect URLs do Supabase.
+
+Não é necessário um workflow de compilação, Vercel, Next.js ou um servidor Node. As rotas usam `#/equipa`, `#/eventos`, etc., pelo que também funcionam ao recarregar uma página num subdiretório do GitHub Pages.
+
+Para fazer alterações, substitui os ficheiros correspondentes e faz commit. O Git mantém as versões anteriores. As edições feitas no painel do Comando ficam no Supabase e passam a estar disponíveis a todos os utilizadores autorizados, sem novos commits.
+
+## 7. O que podes personalizar
+
+| Elemento | Onde alterar |
 | --- | --- |
-| Início | `/#/` |
-| Hierarquia | `/#/?secao=hierarquia` |
-| Eventos | `/#/eventos` |
-| Gestão local | `/#/gestao` |
-| Perfis locais | `/#/entrar` |
+| Cores, fontes, largura, bordas | Variáveis `:root` no início de `style.css` |
+| Brasão | Substituir `images/ushe-emblema.png` |
+| Ícone do separador | Substituir `favicon.ico` |
+| Título, apresentação, lema e recrutamento | Administração → Início e Contactos |
+| Convite do Discord | Administração → Início e Contactos → Convite Discord |
+| Texto institucional, missão e valores | Administração → Quem Somos |
+| Membros, indicativos, patentes e estados | Administração → Equipa |
+| Fotografias | Formulários de Equipa, Fardamento e Equipamento |
+| Anúncios, avisos, regulamento e registos | Páginas respetivas ou Administração |
+| URL e chave pública Supabase | `config.js` |
 
-Em sites de repositório, estes finais vêm depois de `/nome-do-repositorio`. Exemplo: `https://utilizador.github.io/ushe/#/eventos`.
+Os três destaques de valores na página inicial são textos públicos em `js/views.js`; a identidade e os textos institucionais completos são editáveis no painel. Os nomes/ordem das abas e das patentes encontram-se em `js/core.js`. Adicionar novas abas requer também atualizar o enum e as políticas SQL.
 
-O fragmento mantém a navegação dentro de `index.html`, pelo que podes abrir ou recarregar os links do menu sem precisar de regras de reencaminhamento. As antigas rotas sem `#`, como `/eventos/`, devem ser substituídas pelos novos links.
+## 8. Testes opcionais
 
-## Começar a usar
+Com Node.js 22 ou superior:
 
-1. Abre **Entrar** ou **Escolher perfil**.
-2. Cria um perfil com o teu nome. O primeiro perfil desse navegador recebe **Comando** para permitir a configuração local.
-3. Os perfis criados depois recebem **Estagiário**. Em **Gestão**, o Comando pode alterar os cargos locais.
-4. Não são pedidos emails nem palavras-passe. Para usar outro perfil, seleciona-o na mesma página e clica em **Mudar de perfil**.
-5. **Sair** termina apenas a escolha de perfil. Os dados locais continuam guardados. Fechar o separador pode terminar a escolha; os perfis e eventos continuam no navegador.
+```bash
+npm ci
+npm test
+```
 
-Os cargos preservados são Comando, Primeiro Oficial, Oficial, Sargento, Operacional, Estagiário e Quadro Permanentes. O site impede remover o último Comando através da interface. Estas regras locais podem ser contornadas por quem controlar o navegador e não representam controlo de acesso real.
+Os testes executam as tabelas e políticas num PostgreSQL local em WASM (PGlite), com interfaces `auth`/`storage` simuladas. Não contactam nem alteram o projeto Supabase de produção. Consulta `VALIDACAO.md` para o alcance e limites da verificação.
 
-## Eventos
+## 9. Decisões assumidas
 
-- Qualquer perfil local pode criar eventos com título, descrição, data, início, término e local.
-- Os horários usam **Portugal continental — Europe/Lisbon**, independentemente do fuso do computador.
-- O término tem de ser posterior ao início, no mesmo dia. Horas inexistentes na mudança para a hora de verão são recusadas; na hora repetida de outono é usada a primeira ocorrência.
-- Eventos em curso e futuros aparecem primeiro, por data crescente. Os terminados aparecem depois, do mais recente para o mais antigo.
-- **Vou** e **Não vou** mostram a contagem e os nomes dos perfis que responderam.
-- Cada perfil tem uma resposta por evento. Trocar de opção substitui a resposta anterior. Não é possível garantir «uma pessoa» por perfil sem autenticação real.
-- Não há um limite de participantes ou votos definido no código. A capacidade real depende do armazenamento e dos recursos do navegador.
-- A lista pode ser filtrada por todos, próximos/em curso ou terminados.
+- O pedido atual de HTML/CSS/JS + Supabase e SQL substitui o pedido anterior de funcionamento exclusivamente local e sem SQL.
+- **Quem Somos é uma aba reservada**, pois a regra de permissões diz explicitamente que visitantes só veem Início e Contactos.
+- A aprovação e o acesso a Eventos permitem criar eventos e responder, independentemente da patente. A criação de registos exige a autorização adicional individual.
+- Uniform-02 é Diogo Oconner; João Barbosa está em Primeiro Oficial, conforme a equipa indicada. Não inventámos o nome oculto na captura do comunicado.
+- Os indicativos não visíveis ficam em branco, editáveis pelo Comando.
+- O exemplo Ocean Vibe é de **23/10/2026**, uma sexta-feira. Está no arquivo se já terminou. O fim às 23:00 é exemplificativo e assinalado na descrição.
+- Não foi fornecido um convite Discord nem fotografias individuais recortadas dos fardamentos. O convite fica vazio e existem espaços para upload das fotografias. O brasão do projeto existente foi preservado.
+- As capturas e o regulamento incompleto são referências; os textos e as regras do pedido atual prevalecem.
+- Não existe migração automática de perfis/votos locais: esses perfis nunca comprovaram a identidade das pessoas.
 
-Separadores do mesmo navegador, abertos no mesmo endereço do portal, podem partilhar os dados locais e usar perfis diferentes. Navegadores, dispositivos, modos privados e endereços diferentes não partilham os dados automaticamente. Alterações simultâneas em vários separadores não têm as garantias de transação de um serviço central; evita editar o mesmo registo ao mesmo tempo.
+## Referências técnicas
 
-## Editar os textos
-
-Em **Gestão → Conteúdo das páginas**, escolhe Início, Eventos, Gestão, Entrar ou Identidade, rodapé e nomes do menu.
-
-Podes alterar títulos, subtítulos, secções, textos, imagens, itens da hierarquia e a respetiva ordem. Usa **Guardar neste navegador** para aplicar. Os perfis com permissão local de edição também podem editar os textos diretamente nas páginas autorizadas. A Gestão e a identidade do site são apresentadas apenas ao Comando.
-
-Para uma imagem local, envia-a para `images/` no GitHub e usa `images/nome-do-ficheiro.png`. Respeita maiúsculas e minúsculas. Também é possível referenciar uma imagem HTTPS, mas os ficheiros iniciais não dependem de imagens, fontes ou scripts externos.
-
-O editor trabalha com texto simples: etiquetas HTML e scripts introduzidos nos textos são apresentados como texto. Não alteres os identificadores dos itens do menu se editares `conteudo.js` manualmente.
-
-Rascunhos não guardados são mantidos quando chega uma atualização de outro separador. A gravação é recusada se o conteúdo daquela página tiver mudado entretanto. Nesse caso, copia o rascunho e usa **Recarregar conteúdo guardado** antes de tentar novamente. Os botões do menu, a troca de página no editor e a saída do perfil avisam se houver rascunhos por guardar.
-
-### Publicar as edições para todos
-
-1. Guarda os textos no editor.
-2. Em **Gestão → Publicar os textos para todos**, clica em **Descarregar conteudo.js**.
-3. Substitui o ficheiro `conteudo.js` na raiz do repositório pelo ficheiro descarregado e faz commit.
-4. Depois da publicação, os visitantes recebem os novos textos ao carregar o site. Perfis, eventos, votos e permissões individuais não são publicados por esta exportação.
-5. Um navegador com edições locais mantém essas edições. Para passar a usar o conteúdo publicado, recarrega o site e escolhe **Usar os textos publicados neste navegador** na Gestão.
-
-Este processo requer uma atualização manual no GitHub. O site não tem credenciais nem autorização para fazer commits ao teu repositório.
-
-## Guardar e importar uma cópia
-
-Em **Gestão → Cópia dos dados locais**, usa **Descarregar cópia JSON**. A cópia inclui os perfis, cargos, permissões, eventos, respostas e edições locais. Não inclui as imagens: conserva também os ficheiros da pasta `images/`.
-
-Para recuperar uma cópia noutro navegador, abre o mesmo portal, cria um perfil local para teres acesso à Gestão e usa **Importar cópia JSON**. Confirma a substituição apenas depois de guardares os dados atuais que quiseres conservar. O ficheiro é validado antes da importação e o site pede confirmação com as contagens. A importação **substitui**, não junta, os dados locais. São aceites cópias até 20 MB; a capacidade de gravação pode ser inferior, consoante o navegador.
-
-O JSON é lido apenas no navegador, sem envio para um serviço remoto. Não o coloques no repositório público se não quiseres publicar os nomes e restantes dados da cópia.
-
-Se limpares os dados do navegador, usares navegação privada ou mudares de endereço, podes perder acesso aos registos locais. Faz cópias quando precisares de os conservar. Se o armazenamento ficar cheio ou bloqueado, o site apresenta um erro e não substitui os dados anteriores pela alteração recusada. Se o conteúdo local estiver corrompido, apresenta opções para descarregar os dados para recuperação ou repor o navegador.
-
-## Referências
-
-- [GitHub — O que é GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages)
-- [GitHub — Configurar a origem da publicação](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)
-- [GitHub — Criar um site do GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-github-pages-site)
-
-Não foi feita qualquer publicação ou alteração num repositório do GitHub durante a preparação deste ZIP.
+- [GitHub Pages — origem de publicação](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)
+- [Supabase — JavaScript](https://supabase.com/docs/reference/javascript/installing)
+- [Supabase — chaves públicas e secretas](https://supabase.com/docs/guides/getting-started/api-keys)
+- [Supabase — Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security)
+- [Supabase — funções de base de dados](https://supabase.com/docs/guides/database/functions)
+- [Supabase — Storage privado](https://supabase.com/docs/guides/storage/serving/downloads)

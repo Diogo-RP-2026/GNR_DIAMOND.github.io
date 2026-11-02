@@ -1,38 +1,27 @@
-# Validação desta entrega
+# Verificação da entrega
 
-Verificação realizada em 2 de novembro de 2026.
+## Verificado
 
-## Verificações automáticas
-
-- Sintaxe de `script.js` e `conteudo.js`: aprovada.
-- **31 testes aprovados**, sem falhas, executados também com o fuso do processo definido para Nova Iorque para verificar a independência dos horários de Lisboa.
-- Conteúdos iniciais: cinco páginas e os sete cargos da hierarquia preservados.
-- Imagens: referências locais válidas, sem percursos absolutos dependentes da raiz do domínio.
-- Ausência de pedidos de dados externos, importações de bibliotecas, configuração remota, código de servidor e ficheiros `.sql` no pacote.
-
-Os testes abrangem conversão de datas de Lisboa no verão/inverno, mudança de hora, datas impossíveis, ordenação, validação de eventos, identidade das referências importadas, recusa de votos duplicados, mais de 1200 votos, preferências dos cargos, delegação local da edição, tratamento seguro do texto e das imagens, falhas de quota, dados corrompidos e preservação dos dados anteriores quando uma gravação é recusada.
-
-A geração de `conteudo.js` foi executada e o resultado foi interpretado como JavaScript: contém as cinco páginas e não inclui perfis, eventos, votos ou permissões individuais. A cópia JSON gerada foi novamente validada sem perda de registos.
-
-## Verificação no navegador
-
-- Página inicial, emblema e hierarquia carregados e inspecionados visualmente.
-- Criação do primeiro perfil local como Comando e do segundo como Estagiário.
-- Gestão apresentada apenas ao perfil Comando na navegação local.
-- Criação de um evento com título, descrição, data, início, término e local.
-- Voto «Vou», troca para «Não vou» e persistência depois de recarregar a página.
-- Resposta com o segundo perfil, confirmando as duas contagens e as listas de nomes.
-- Edição do título do Início e confirmação do texto na página inicial.
-- Exportação efetiva de uma cópia JSON com dois perfis, um evento e duas respostas; importação validada, confirmação apresentada e perfis recuperados.
-- Carregamento direto e recarregamento de `#/eventos` dentro de uma subpasta de teste.
-- Página inicial e imagens carregadas nessa subpasta; dados locais isolados do portal na raiz.
-
-O download de `conteudo.js` não foi confirmado na sessão de pré-visualização; a geração e o conteúdo do ficheiro foram verificados automaticamente. Não foi efetuada uma auditoria completa de acessibilidade nem um teste em todos os navegadores ou tamanhos de ecrã.
+- Sintaxe de todos os ficheiros JavaScript da aplicação, através de `node --check`.
+- **16 testes aprovados**: tratamento de HTML, pesquisa sem acentos, conversão Europe/Lisbon, horas inexistentes/repetidas, duração de eventos, ordenação de agenda/arquivo, convites Discord e carregamento de mais de 1000 respostas.
+- Execução real de `01_schema.sql` e `02_seed.sql` em PostgreSQL/PGlite, incluindo tabelas, funções, relações, índices e políticas RLS. Os esquemas Auth e Storage do Supabase são simulados nessa execução local.
+- Visitantes sem acesso às tabelas internas; início limitado a títulos de anúncios e contagem de efetivos.
+- Contas novas não se aprovam nem recebem Comando através de metadados de registo.
+- Aprovação, acessos por aba, proteção contra auto-promoção e suspensão com o mesmo JWT.
+- Uma resposta por conta/evento, alteração de resposta e impossibilidade de modificar votos de terceiros.
+- Registos dependentes da permissão adicional de criação; documentos/participantes são guardados atomicamente.
+- Fotografias privadas: leitura condicionada pela aba e escrita reservada ao Comando.
+- Página inicial, contactos e bloqueio de uma ligação direta para Equipa sem sessão, no navegador.
+- Interface interna com um cliente de teste e os dados iniciais: Equipa, Quem Somos, Anúncios, Eventos, Avisos, Fardamento, Equipamento, Regulamento, Registos e Administração.
+- Pesquisa `joao` encontra João Barbosa; formulário de edição carrega os seus dados.
+- Criação de um evento, troca Vou/Não vou e gravação de permissões no cliente de teste da interface.
+- Apresentação desktop e menu móvel num enquadramento de 390 px; sem transbordo horizontal observado na página inicial móvel.
+- O brasão e o favicon coincidem com os ficheiros da versão anterior do repositório.
 
 ## Limites
 
-Não foi publicado nem alterado um repositório real do GitHub. A compatibilidade foi verificada na estrutura dos ficheiros, na navegação estática e na pré-visualização em raiz e subpasta.
+Não foi fornecido um projeto Supabase configurado nem as suas chaves públicas. Não foram criadas contas reais, executado SQL num serviço de produção, enviados emails, validados os limites do serviço ou carregadas fotografias num bucket real. Os formulários internos foram verificados com dados sintéticos; essa verificação não substitui um teste final da integração Auth/PostgREST/Storage depois da configuração.
 
-Esta versão não fornece sincronização entre dispositivos, autenticação real ou permissões de servidor. Os testes das preferências locais não representam validação de segurança multiutilizador.
+O portal não apresenta uma sessão de demonstração em produção e não concede Comando à primeira conta. Os ficheiros de teste usados na pré-visualização não integram o site nem o ZIP.
 
-Os registos usados nos testes são fictícios e **não estão incluídos no ZIP**. O portal começa com os textos públicos e sem perfis, eventos ou votos de teste.
+Para a verificação final da instalação, cria uma conta Comando e uma conta membro. Aprova apenas Eventos para o membro, confirma o acesso e o voto, retira a permissão e confirma que a mesma conta deixa de conseguir consultar e votar. Depois atribui Registos, primeiro sem e depois com autorização de criação, e verifica o comportamento. Testa a confirmação/recuperação por email e o upload de uma fotografia com a configuração real.

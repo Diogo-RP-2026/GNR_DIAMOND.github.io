@@ -1,0 +1,13 @@
+{
+  "name": "ushe-portal",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Portal estático da USHE para GitHub Pages e Supabase",
+  "scripts": {
+    "test": "node --test tests/core.test.mjs tests/rls.test.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.3.15"
+  }
+}

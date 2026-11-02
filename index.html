@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pt-PT">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="USHE — Unidade de Segurança e Honra do Estado. Estrutura, hierarquia e eventos da unidade.">
+    <meta name="theme-color" content="#111b15">
+    <title>USHE — Portal da Unidade</title>
+    <link rel="icon" href="./favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="./style.css">
+    <script src="./conteudo.js" defer></script>
+    <script src="./script.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#conteudo-principal">Saltar para o conteúdo</a>
+    <div class="portal-shell">
+      <header class="portal-header" id="site-header">
+        <a class="brand" href="#/">
+          <img src="./images/ushe-emblema.png" alt="Emblema da USHE" width="48" height="48">
+          <div><strong>USHE</strong><small>Unidade de Segurança e Honra do Estado</small></div>
+        </a>
+      </header>
+      <aside class="local-banner" aria-label="Funcionamento do portal">
+        <span class="mode-label">Modo local</span>
+        <p>Os perfis, eventos, votos e edições ficam apenas neste navegador. Os perfis não são contas autenticadas e as permissões não protegem informação privada.</p>
+        <a href="#/entrar">Escolher perfil</a>
+      </aside>
+      <div id="storage-notice" class="storage-notice" hidden></div>
+      <div id="feedback" class="feedback" role="status" aria-live="polite" hidden></div>
+      <main class="portal-main" id="conteudo-principal" tabindex="-1">
+        <div class="page-heading"><h1>USHE</h1><p>A carregar o portal…</p></div>
+      </main>
+      <footer class="portal-footer" id="site-footer">
+        <strong>USHE</strong><p>Unidade de Segurança e Honra do Estado — Aequo Animo</p>
+      </footer>
+    </div>
+    <noscript><p class="notice">Ativa o JavaScript para navegar no portal e usar os eventos e perfis locais.</p></noscript>
+  </body>
+</html>

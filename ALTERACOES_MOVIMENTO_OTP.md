@@ -62,7 +62,7 @@ Proteções implementadas:
    | --- | --- |
    | `OTP_SECRET` | Pelo menos 32 bytes aleatórios. Gerar localmente com `python -c "import secrets; print(secrets.token_hex(32))"`. |
    | `RESEND_API_KEY` | Chave do fornecedor com permissão de envio. |
-   | `OTP_FROM_EMAIL` | Remetente autorizado, por exemplo `USHE <acesso@teu-dominio.pt>`. |
+   | `OTP_FROM_EMAIL` | Nome e endereço de um remetente autorizado pelo fornecedor. |
    | `OTP_ALLOWED_ORIGINS` | `https://diogo-rp-2026.github.io`, sem caminho/barra final; separar origens por vírgulas se necessário. |
 
    O Supabase injeta `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `SUPABASE_SERVICE_ROLE_KEY` na função. Não copiar segredos para `config.js`, GitHub ou chat. `secrets.example` contém apenas nomes/campos vazios.
@@ -121,5 +121,10 @@ O histórico remoto foi criado pela integração Supabase. A migração está re
 - HTTP na função publicada: `status` 200/`ready:false`, origem não autorizada 403 e GET 405. Na API pública, `otp_policy` devolveu 200/`enabled:false` e a chamada direta a `otp_service` foi recusada com 401/42501.
 - Chrome: menu/Escape e atrasos; separador preenchido e destaque anterior removido; notificação contraída até ao ponto e mensagem ainda por ler na caixa. Layout revisto em desktop e frames de 390/820 px, sem overflow horizontal dos campos.
 - OTP visual: introdução, validação, erro e sucesso revistos numa fixture isolada, identificada como simulação de serviços. A fixture não autentica contas e não é publicada.
-- Login real posterior à ativação: palavra-passe aceite, email entregue por Gmail, quatro dígitos confirmados pelo backend, sessão instalada e Início ativo no menu. O utilizador introduziu os segredos pela janela segura; não foram recolhidos códigos, palavras-passe ou tokens no registo do teste. O endereço exato do remetente não foi confirmado no cabeçalho da mensagem.
-- `prefers-reduced-motion`: ramo JavaScript sem voo exercitado nos testes e CSS com animações/transições suprimidas. Não foi testado num telemóvel físico nem alterada a preferência de um dispositivo rea…174 tokens truncated… de tentativas), já exercitados nos testes locais/SQL. A configuração, a ativação, a entrega de email e o login ponta a ponta estão confirmados; o endereço exato do remetente deve ser conferido no cabeçalho da mensagem recebida.
+- Login real posterior à ativação: palavra-passe aceite, email entregue por Gmail, quatro dígitos confirmados pelo backend, sessão instalada e Início ativo no menu. O utilizador introduziu os segredos pela janela segura; não foram recolhidos códigos, palavras-passe ou tokens no registo do teste.
+- `prefers-reduced-motion`: ramo JavaScript sem voo exercitado nos testes e CSS com animações/transições suprimidas. Não foi testado num telemóvel físico nem alterada a preferência de um dispositivo real.
+- `git diff --check` e verificação sintática dos módulos JavaScript.
+- Conselheiro Supabase: nenhum novo WARN/ERROR; quatro INFO esperados por RLS sem políticas em tabelas privadas deliberadamente fechadas. Mantém-se o aviso anterior sobre proteção de palavras-passe comprometidas.
+- O CLI não conseguiu listar a stack local, porque não existe PostgreSQL/Docker local; o histórico remoto foi confirmado pela API e as regras foram testadas em PGlite e no Supabase real.
+
+**Pendente de teste com emails reais:** registo, recuperação, reenvio e cenários de recusa (código incorreto, expirado, reutilizado e excesso de tentativas), já exercitados nos testes locais/SQL. A configuração, a ativação, a entrega de email e o login ponta a ponta estão confirmados.

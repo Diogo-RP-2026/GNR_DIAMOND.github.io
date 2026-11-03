@@ -8,7 +8,7 @@ insert into auth.sessions(id,user_id,created_at,updated_at)
 values(current_setting('ushe.qa.sid')::uuid,current_setting('ushe.qa.uid')::uuid,now(),now());
 update private.otp_settings set enabled=true where id;
 select set_config('request.jwt.claim.sub',current_setting('ushe.qa.uid'),true);
-select set_config('request.jwt.claims',jsonb_build_object('sub',current_setting('ushe.qa.uid'),'session_id',current_setting('ushe.qa.sid'),'role','authenticated')::text,true);
+select set_config('request.jwt.claims',jsonb_build_object('sub',current_setting('ushe.qa.uid'),'session_id',current_setting('ushe.qa.sid'),'role','authenticated','exp',extract(epoch from now()+interval '1 hour'))::text,true);
 set local role authenticated;
 do $$ begin
  if public.otp_session_verified() then raise exception 'Sessão não verificada foi aceite';end if;

@@ -37,7 +37,7 @@ Cola o resultado apenas no campo do segredo no Supabase. Não substituas um `OTP
 
 ## 3. Confirmar preparação, ativar e testar
 
-O `status` da função `portal-otp` deve responder `ready: true` depois dos segredos configurados. O campo `configuration` apresenta apenas o fornecedor reconhecido (`gmail`, `resend` ou `invalid`) e os nomes de configurações em falta/inválidas, nunca os seus valores. Se indicar `OTP_EMAIL_PROVIDER`, guardar exatamente `gmail` no campo Value do Supabase, sem aspas nem formatação. Este estado valida apenas o formato/configuração; não autentica a conta no Gmail nem confirma que uma mensagem chegou à caixa.
+O `status` público da função `portal-otp` responde apenas `ready: true` ou `ready: false`. O diagnóstico de fornecedor e nomes de configurações foi retirado da resposta pública na auditoria de 03/11/2026. Se `ready` for falso, um administrador deve conferir os nomes e formatos dos segredos no Dashboard, sem os copiar para logs ou para o frontend. Este estado não autentica a conta no Gmail nem confirma a entrega de mensagens.
 
 Quando estiver tudo preparado, um administrador ativa no SQL Editor:
 

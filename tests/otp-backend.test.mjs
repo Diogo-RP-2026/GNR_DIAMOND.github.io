@@ -97,3 +97,13 @@ test('audit: unknown recovery/existing signup returns indistinguishable challeng
   assert.equal(f.code,null);assert.equal(f.granted,false);assert.ok(!result.data.session);
  }
 });
+
+test('audit: decoy recovery also supports resend and never grants tokens for a guessed synthetic code',async()=>{
+ let i=0;const f=fixture({linkError:true,newCode:()=>['0042','0077'][i++]});
+ const start=await f.request({action:'start',operation:'recovery',email:'missing@example.test'});
+ const args={id:start.data.id,proof:start.data.proof};
+ assert.equal((await f.request({...args,action:'resend'})).status,200);
+ assert.equal(f.code,null);
+ const result=await f.request({...args,action:'verify',code:'0077'});
+ assert.equal(result.data.reason,'invalid');assert.ok(!result.data.session);assert.equal(f.granted,false);
+});

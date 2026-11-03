@@ -207,3 +207,14 @@ Os testes executam as tabelas e políticas num PostgreSQL local em WASM (PGlite)
 - [Supabase — Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security)
 - [Supabase — funções de base de dados](https://supabase.com/docs/guides/database/functions)
 - [Supabase — Storage privado](https://supabase.com/docs/guides/storage/serving/downloads)
+
+
+## Atualização de segurança — 03/11/2026
+
+A migração `supabase/migrations/20261103214002_security_audit_hardening.sql` e as funções `portal-otp` e `agent-avatar` reforçam a validação das sessões, recuperação de conta, validação de ficheiros e limites no backend. As fotografias pessoais e oficiais passam pela função `agent-avatar`; uploads diretos por agentes ou Comando não são permitidos. Não reativar as políticas antigas de escrita do bucket.
+
+As imagens aceites são JPEG, PNG e WebP até 5 MB, 4 milhões de píxeis e 4096 píxeis por lado. O backend descodifica e converte para JPEG, sem metadados. A quota fixa é de 20 pedidos de upload por utilizador em 15 minutos, incluindo tentativas inválidas.
+
+Consulta `SEGURANCA.md` para instalação, testes e configurações manuais. O relatório completo entregue separadamente distingue testes locais, testes na base de dados e testes HTTP. Não é uma garantia de segurança absoluta.
+
+`npm ci --ignore-scripts && npm test` executa os testes. `npm run build` gera `dist/` com os ficheiros públicos necessários. Se mudares o endereço Supabase em `config.js`, atualiza também a lista exata de destinos em `connect-src` no `index.html`.

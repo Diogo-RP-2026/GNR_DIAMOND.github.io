@@ -83,12 +83,15 @@ document.addEventListener('click',async event=>{
     else if(action==='delete') {
       el.disabled=true;if(await deleteRecord(table,id,cache)){toast('Registo apagado.');await render({preserveScroll:true});}
     } else if(action==='vote') {
-      el.disabled=true;
-      const isEvent=el.dataset.kind==='event',target=isEvent?'event_responses':'announcement_responses',key=isEvent?'event_id':'announcement_id';
-      await result(db.from(target).upsert({[key]:id,user_id:state.user.id,attending:el.dataset.attending==='true',updated_at:new Date().toISOString()},{onConflict:`${key},user_id`}));
-      const responses=await rpc('response_names',{p_kind:el.dataset.kind,p_id:id});
-      const parent=el.closest('.responses');if(parent?.isConnected)parent.outerHTML=views.responseComponent(el.dataset.kind,id,responses);
-      toast('Disponibilidade atualizada.');
+      const voting=el.closest('.responses');
+      voting.querySelectorAll('[data-action="vote"]').forEach(button=>button.disabled=true);
+      try {
+        const isEvent=el.dataset.kind==='event',target=isEvent?'event_responses':'announcement_responses',key=isEvent?'event_id':'announcement_id';
+        await result(db.from(target).upsert({[key]:id,user_id:state.user.id,attending:el.dataset.attending==='true',...(!isEvent?{updated_at:new Date().toISOString()}:{})},{onConflict:`${key},user_id`}));
+        const responses=await rpc('response_names',{p_kind:el.dataset.kind,p_id:id});
+        const parent=el.closest('.responses');if(parent?.isConnected)parent.outerHTML=views.responseComponent(el.dataset.kind,id,responses);
+        toast('Disponibilidade atualizada.');
+      } finally {voting.querySelectorAll('[data-action="vote"]').forEach(button=>button.disabled=false);}
     } else if(action==='copy') {await navigator.clipboard.writeText(el.dataset.value);toast(`Código ${el.dataset.value} copiado.`);}
     else if(action==='scroll')document.getElementById(el.dataset.target)?.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});
     else if(action==='refresh') {state.publicInfo=await views.publicInfo();await render({preserveScroll:true});toast('Informação atualizada.');}

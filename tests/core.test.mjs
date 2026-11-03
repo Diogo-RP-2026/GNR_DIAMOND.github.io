@@ -35,3 +35,22 @@ test('listas de votos são paginadas e não truncam nos primeiros 1000 nomes',as
   const query={range(start,end){calls++;return Promise.resolve({data:data.slice(start,end+1),error:null});}};
   const output=await allRows(query);assert.equal(output.length,1207);assert.equal(calls,3);assert.equal(output[1206].id,1206);
 });
+
+
+test('votos verticais ordenados pelo instante e UUID, escapando nomes',async()=>{
+  globalThis.window ||= {};
+  const {responseComponent}=await import('../js/views.js');
+  const {orderedResponses}=await import('../js/core.js');
+  const input=[
+    {user_id:'c',full_name:'Último',attending:true,updated_at:'2026-11-03T10:00:00.000003+00:00'},
+    {user_id:'b',full_name:'Segundo',attending:true,updated_at:'2026-11-03T10:00:00.000002+00:00'},
+    {user_id:'a',full_name:'<Primeiro>',attending:true,updated_at:'2026-11-03T10:00:00.000002+00:00'},
+    {user_id:'d',full_name:'Ausente',attending:false,updated_at:'2026-11-03T09:00:00Z'},
+  ];
+  assert.deepEqual(orderedResponses(input).map(r=>r.user_id),['d','a','b','c']);
+  const html=responseComponent('event','123',input);
+  assert.ok(html.includes('<li>&lt;Primeiro&gt;</li><li>Segundo</li><li>Último</li>'));
+  assert.ok(html.includes('<ul class="vote-names"><li>Ausente</li></ul>'));
+  assert.ok(html.includes('<strong>3</strong>'));assert.ok(html.includes('<strong>1</strong>'));
+  assert.equal(input[0].user_id,'c');
+});

@@ -63,3 +63,11 @@ export const button = (action,label,attributes='')=>`<button type="button" class
 export function cardActions(table,id,canEdit) {
   return canEdit?`<div class="card-actions">${button('edit','Editar',`data-table="${table}" data-id="${id}"`)}<button class="text-button danger" data-action="delete" data-table="${table}" data-id="${id}">Apagar</button></div>`:'';
 }
+
+
+// Timestamp do servidor, incluindo microssegundos; UUID desempata de forma estável.
+export function orderedResponses(responses) {
+  const fraction=r=>(r.updated_at?.match(/\.(\d+)/)?.[1] || '').padEnd(6,'0');
+  return [...responses].sort((a,b)=>(Date.parse(a.updated_at)||0)-(Date.parse(b.updated_at)||0)
+    || fraction(a).localeCompare(fraction(b)) || a.user_id.localeCompare(b.user_id));
+}

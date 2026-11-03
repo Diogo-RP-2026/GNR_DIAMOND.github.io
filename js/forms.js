@@ -1,6 +1,6 @@
 // Formulários reutilizáveis. Os documentos com participantes usam funções SQL atómicas.
 import {e,RANKS,PIECES,TABS,lisbonInput,lisbonISO,dateRange,discordURL,errorMessage,toast,uniform} from './core.js';
-import {db,state,isCommand,canLog,hasTab,result,rpc,save,upload,releaseImages} from './api.js';
+import {db,state,isCommand,canManageEvent,canLog,hasTab,result,rpc,save,upload,releaseImages} from './api.js';
 
 const fields={
   members:[['uniform_number','Número de uniforme','number',true],['name','Nome','text',true],['callsign','Indicativo','text'],['rank','Patente','select',true,RANKS],['active','Elemento no ativo','checkbox']],
@@ -40,7 +40,7 @@ export async function openEditor(table,id,cache) {
   if(!fields[table])throw new Error('Formulário desconhecido.');
   let record=id?(cache[table] || []).find(r=>String(r.id)===String(id)):null;
   if(id&&!record)throw new Error('Registo indisponível. Atualiza a página.');
-  const allowed=isCommand() || (table==='events'&&hasTab('eventos')&&(!id||record?.created_by===state.user?.id)) || (table==='event_logs'&&canLog()&&!id);
+  const allowed=isCommand() || (table==='events'&&hasTab('eventos')&&(!id||canManageEvent(record))) || (table==='event_logs'&&canLog()&&!id);
   if(!allowed)throw new Error('Sem autorização para editar este conteúdo.');
   const row=record?{...record}:defaults(table);
   if(table==='uniforms'&&record)row.pieces_text=Object.entries(row.pieces).map(([k,v])=>`${k} = ${v}`).join('\n');
@@ -106,6 +106,8 @@ export async function deleteRecord(table,id,cache) {
   if(!fields[table]||['contact_info','institutional_content'].includes(table))throw new Error('Operação indisponível.');
   const row=(cache[table] || []).find(r=>String(r.id)===String(id));
   if(!row)throw new Error('Registo indisponível.');
+  if(table==='events'&&!canManageEvent(row))throw new Error('Sem autorização para apagar este evento.');
+  if(table!=='events'&&!isCommand())throw new Error('Sem autorização para apagar este conteúdo.');
   if(!confirm(`Apagar ${labels[table]} "${row.title || row.name || row.event_type}"? Esta ação remove também as respostas e ligações deste registo.`))return false;
   const deleted=await result(db.from(table).delete().eq('id',id).select('id'));
   if(!deleted.length)throw new Error('Não foi possível apagar: registo inexistente ou sem autorização.');

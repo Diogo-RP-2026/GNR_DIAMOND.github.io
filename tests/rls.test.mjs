@@ -10,7 +10,7 @@ test('permissões, votos, documentos e fotografias são protegidos por PostgreSQ
   const sql=async(q,p=[])=>db.query(q,p);
   const uid={admin:'10000000-0000-4000-8000-000000000001',member:'10000000-0000-4000-8000-000000000002',pending:'10000000-0000-4000-8000-000000000003',other:'10000000-0000-4000-8000-000000000004'};
   const as=async(role,id='')=>{await db.exec('reset role');await sql("select set_config('request.jwt.claim.sub',$1,false)",[id]);await db.exec(`set role ${role}`);};
-  await db.exec(`create role anon; create role authenticated; create schema auth; create schema storage;
+  await db.exec(`create role anon; create role authenticated; create role service_role; create schema auth; create schema storage;
     create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb default '{}');
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
     grant usage on schema auth,storage,public to anon,authenticated;
@@ -22,6 +22,7 @@ test('permissões, votos, documentos e fotografias são protegidos por PostgreSQ
   await db.exec(await readFile(new URL('../supabase/01_schema.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('../supabase/02_seed.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('../supabase/04_estatisticas_publicas.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('../supabase/05_eventos_contas.sql',import.meta.url),'utf8'));
   for(const [name,id] of Object.entries(uid))await sql('insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3)',[id,`${name}@example.test`,JSON.stringify({full_name:name,role:'command',approved:true})]);
   await sql("update public.profiles set role='command',approved=true where id=$1",[uid.admin]);
   const event='e0000000-0000-4000-8000-000000000001';
@@ -67,6 +68,67 @@ test('permissões, votos, documentos e fotografias são protegidos por PostgreSQ
     assert.equal((await sql('update public.event_responses set attending=true where user_id=$1 returning *',[uid.member])).rows.length,0);
     await sql('insert into public.event_responses(event_id,user_id,attending) values($1,$2,true)',[event,uid.other]);
     await assert.rejects(sql('insert into public.event_responses(event_id,user_id,attending) values($1,$2,true)',[event,uid.pending]),/row-level security/);
+  });
+  await t.test('hora do voto vem do servidor; repetir mantém posição; mudar acrescenta ao fim',async()=>{
+    await as('authenticated',uid.member);
+    const before=(await sql('select * from public.event_responses where user_id=$1',[uid.member])).rows[0].updated_at;
+    await sql("update public.event_responses set updated_at='2099-01-01' where user_id=$1",[uid.member]);
+    assert.deepEqual((await sql('select updated_at from public.event_responses where user_id=$1',[uid.member])).rows[0].updated_at,before);
+    await sql('update public.event_responses set attending=true where user_id=$1',[uid.member]);
+    let votes=(await sql('select * from public.response_names($1,$2)',['event',event])).rows;
+    assert.deepEqual(votes.map(v=>v.user_id),[uid.other,uid.member]);
+    assert.equal(votes.filter(v=>v.attending).length,2);
+    assert.ok(new Date(votes[1].updated_at)>new Date(before));
+    await sql('insert into public.event_responses(event_id,user_id,attending) values($1,$2,true) on conflict(event_id,user_id) do update set attending=excluded.attending',[event,uid.member]);
+    assert.deepEqual((await sql('select * from public.response_names($1,$2)',['event',event])).rows,votes);
+    await assert.rejects(sql('update public.event_responses set user_id=$1 where user_id=$2',[uid.pending,uid.member]),/identidade/);
+    await assert.rejects(sql('update public.event_responses set event_id=gen_random_uuid() where user_id=$1',[uid.member]),/identidade/);
+  });
+  await t.test('criador e Comando editam/apagam; terceiros bloqueados; editar preserva votos e apagar faz cascade',async()=>{
+    await as('authenticated',uid.member);
+    const data=['Evento de teste','Descrição','2026-12-01T10:00Z','2026-12-01T11:00Z','Quartel'];
+    const create=async()=>(await sql('insert into public.events(title,description,starts_at,ends_at,location) values($1,$2,$3,$4,$5) returning id',data)).rows[0].id;
+    const own=await create();
+    await sql('insert into public.event_responses(event_id,user_id,attending) values($1,$2,true)',[own,uid.member]);
+    const before=(await sql('select * from public.event_responses where event_id=$1',[own])).rows;
+    await sql("update public.events set title='Título alterado',description='Nova descrição',starts_at='2026-12-02T12:00Z',ends_at='2026-12-02T13:00Z',location='Lisboa' where id=$1",[own]);
+    assert.deepEqual((await sql('select * from public.event_responses where event_id=$1',[own])).rows,before);
+    await assert.rejects(sql('update public.events set created_by=$1 where id=$2',[uid.other,own]),/permission denied/);
+    await assert.rejects(sql('update public.events set id=gen_random_uuid() where id=$1',[own]),/permission denied/);
+    await assert.rejects(sql('insert into public.events(title,description,starts_at,ends_at,location,created_by) values($1,$2,$3,$4,$5,$6)',[...data,uid.other]),/permission denied/);
+    await as('authenticated',uid.other);
+    assert.equal((await sql("update public.events set title='Proibido' where id=$1 returning id",[own])).rows.length,0);
+    assert.equal((await sql('delete from public.events where id=$1 returning id',[own])).rows.length,0);
+    await as('authenticated',uid.admin);
+    assert.equal((await sql("update public.events set title='Comando alterou' where id=$1 returning id",[own])).rows.length,1);
+    assert.deepEqual((await sql('select * from public.event_responses where event_id=$1',[own])).rows,before);
+    await assert.rejects(sql('update public.events set created_by=$1 where id=$2',[uid.admin,own]),/permission denied/);
+    assert.equal((await sql('delete from public.events where id=$1 returning id',[own])).rows.length,1);
+    assert.equal((await sql('select * from public.event_responses where event_id=$1',[own])).rows.length,0);
+    await as('authenticated',uid.member);
+    const own2=await create();
+    await sql('insert into public.event_responses(event_id,user_id,attending) values($1,$2,true)',[own2,uid.member]);
+    assert.equal((await sql('delete from public.events where id=$1 returning id',[own2])).rows.length,1);
+    assert.equal((await sql('select * from public.event_responses where event_id=$1',[own2])).rows.length,0);
+  });
+  await t.test('contas/perfis resistem a DELETE, TRUNCATE, troca de ID e cargo, mesmo por Comando',async()=>{
+    for(const id of [uid.member,uid.admin]) {
+      await as('authenticated',id);
+      await assert.rejects(sql('delete from public.profiles where id=$1',[uid.other]),/permission denied/);
+      await assert.rejects(sql('delete from public.profiles where id=$1',[id]),/permission denied/);
+      await assert.rejects(sql('truncate public.profiles cascade'),/permission denied/);
+      await assert.rejects(sql('delete from auth.users where id=$1',[uid.other]),/permission denied/);
+      await assert.rejects(sql('update public.profiles set id=gen_random_uuid() where id=$1',[id]),/permission denied/);
+      await assert.rejects(sql("update public.profiles set role='command',approved=true where id=$1",[id]),/permission denied/);
+      await assert.rejects(sql(`update auth.users set raw_user_meta_data='{"role":"command"}' where id=$1`,[id]),/permission denied/);
+    }
+    await as('authenticated',uid.member);
+    await assert.rejects(sql('select public.set_user_access($1,$2,$3,$4)',[uid.member,'command',true,'[]']),/Só o Comando/);
+    await as('postgres');
+    const temp='10000000-0000-4000-8000-000000000099';
+    await sql("insert into auth.users(id,email) values($1,'admin-cleanup@example.test')",[temp]);
+    await sql('delete from auth.users where id=$1',[temp]);
+    assert.equal((await sql('select * from public.profiles where id=$1',[temp])).rows.length,0);
   });
   let logId;
   await t.test('registos exigem autorização de criação e mantêm participantes atomicamente',async()=>{

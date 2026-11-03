@@ -35,7 +35,11 @@ export const rows=(table,select='*',order)=>{
   const q=db.from(table).select(select);
   return allRows(order?q.order(order):q.order(table==='tab_permissions'?'user_id':'id'));
 };
-export const rpc=(name,args={})=>['member_options','response_names'].includes(name)?allRows(db.rpc(name,args)):result(db.rpc(name,args));
+export const rpc=(name,args={})=>{
+  if(name==='response_names')return allRows(db.rpc(name,args).order('updated_at').order('user_id'));
+  return name==='member_options'?allRows(db.rpc(name,args)):result(db.rpc(name,args));
+};
+export const canManageEvent=event=>!!(hasTab('eventos') && (isCommand() || event?.created_by===state.user?.id));
 export async function save(table,id,data) {
   return result(id?db.from(table).update(data).eq('id',id).select().single():db.from(table).insert(data).select().single());
 }

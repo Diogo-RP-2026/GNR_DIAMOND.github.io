@@ -31,6 +31,8 @@ export function createOtpHandler({env,admin,auth,fetcher=fetch,newCode=generateC
     const email=String(body.email||'').trim().toLowerCase(),password=String(body.password||''),operation=body.operation;
     if(email.length>254||!/^\S+@\S+\.\S+$/.test(email)||!['login','signup','recovery'].includes(operation)||password.length>128)return reply({error:'Dados de autenticação inválidos.'},400);
     await rate('email',email,5);
+    const {data:startAllowed,error:startLimitError}=await admin.rpc('otp_start_allowed',{p_key:await hash('email-start',email)});
+    if(startLimitError)throw new Error('storage');if(startAllowed!==true)throw new Error('rate_limit');
     let user,payload;
     if(operation==='login') {
      const {data,error}=await auth.auth.signInWithPassword({email,password});

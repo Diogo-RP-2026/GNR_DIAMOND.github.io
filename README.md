@@ -218,3 +218,5 @@ As imagens aceites são JPEG, PNG e WebP até 5 MB, 4 milhões de píxeis e 4096
 Consulta `SEGURANCA.md` para instalação, testes e configurações manuais. O relatório completo entregue separadamente distingue testes locais, testes na base de dados e testes HTTP. Não é uma garantia de segurança absoluta.
 
 `npm ci --ignore-scripts && npm test` executa os testes. `npm run build` gera `dist/` com os ficheiros públicos necessários. Se mudares o endereço Supabase em `config.js`, atualiza também a lista exata de destinos em `connect-src` no `index.html`.
+
+A migração adicional `20261103223933_otp_start_cooldown.sql` aplica um intervalo fixo de 60 segundos por email antes de contactar o Auth, tanto em contas reais como em desafios sintéticos. Aplicar ambas as migrações de auditoria antes de publicar a função OTP atualizada.

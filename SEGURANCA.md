@@ -41,3 +41,5 @@ A CSP está em meta, porque GitHub Pages não permite configurar livremente cabe
 A chave `sb_publishable_` em `config.js` é pública por desenho. Credenciais administrativas, `SUPABASE_SERVICE_ROLE_KEY`, `OTP_SECRET`, `OTP_GMAIL_APP_PASSWORD` e `RESEND_API_KEY` pertencem apenas aos segredos das funções. Não foram encontrados valores secretos pelos padrões pesquisados no histórico disponível; isso não comprova ausência absoluta.
 
 Se uma exposição for confirmada: revogar/rodar primeiro a credencial no fornecedor, atualizar o segredo do backend e testar um fluxo controlado. Inventariar commits e artefactos afetados apenas por caminho/ID. Preparar uma cópia e um plano de `git filter-repo`, rever o impacto e obter confirmação explícita antes de reescrever/purgar o histórico remoto. Nenhuma reescrita de histórico foi efetuada nesta auditoria.
+
+A migração adicional `20261103223933_otp_start_cooldown.sql` aplica um intervalo fixo de 60 segundos por email antes de contactar o Auth, tanto em contas reais como em desafios sintéticos. Aplicar ambas as migrações de auditoria antes de publicar a função OTP atualizada.

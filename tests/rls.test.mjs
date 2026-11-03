@@ -28,6 +28,7 @@ test('permissões, votos, documentos e fotografias são protegidos por PostgreSQ
   await db.exec(await readFile(new URL('../supabase/migrations/20261103021624_portal_otp_four_digits.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('../supabase/migrations/20261103201646_agent_profiles.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('../supabase/migrations/20261103214002_security_audit_hardening.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('../supabase/migrations/20261103223933_otp_start_cooldown.sql',import.meta.url),'utf8'));
   for(const [name,id] of Object.entries(uid))await sql('insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3)',[id,`${name}@example.test`,JSON.stringify({full_name:name,role:'command',approved:true})]);
   for(const id of Object.values(uid))await sql('insert into auth.sessions(id,user_id) values($1,$2)',[sessions[id],id]);
   await sql("update public.profiles set role='command',approved=true where id=$1",[uid.admin]);
@@ -372,6 +373,9 @@ test('permissões, votos, documentos e fotografias são protegidos por PostgreSQ
     await as('authenticated',uid.member);
     assert.equal((await sql("select public.reserve_portal_upload('equipa') ok")).rows[0].ok,false);
     await as('anon');await assert.rejects(sql('select public.reserve_portal_upload(null)'),/permission denied/);
+    await assert.rejects(sql('select public.otp_start_allowed($1)',['b'.repeat(64)]),/permission denied/);
+    await as('service_role');assert.equal((await sql('select public.otp_start_allowed($1) ok',['b'.repeat(64)])).rows[0].ok,true);
+    assert.equal((await sql('select public.otp_start_allowed($1) ok',['b'.repeat(64)])).rows[0].ok,false);
   });
   await t.test('audit: infinite dates, oversized content and null access assignments rejected in database',async()=>{
     await as('authenticated',uid.admin);

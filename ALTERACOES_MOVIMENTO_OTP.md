@@ -1,10 +1,10 @@
 # Movimento e verificação de quatro dígitos — 03/11/2026
 
-**Atualização de envio:** a configuração Gmail já é reconhecida e a política OTP foi ativada. A entrega real ainda aguarda teste com uma conta própria; ver [estado atual e configuração Gmail](ATIVAR_OTP_GMAIL.md). Os estados de instalação abaixo registam a entrega inicial, antes desta ativação.
+**Atualização de envio e login — 03/11/2026:** configuração Gmail reconhecida, política OTP ativa e teste real concluído com uma conta existente. O email foi recebido, o código introduzido pela janela segura foi confirmado pelo backend e **Continuar** abriu o **Início**, com `aria-current="page"` no menu. Não foram criadas contas nem alteradas permissões. Ver [estado atual e configuração Gmail](ATIVAR_OTP_GMAIL.md). Os estados de instalação inicial abaixo são históricos.
 
 O portal continua em HTML, CSS e JavaScript, com rotas `#/`, ficheiros estáticos no GitHub Pages e autenticação/dados no Supabase. Não foi introduzido React nem compilação para publicar o frontend.
 
-## Estado da instalação
+## Estado da instalação inicial (histórico)
 
 - Efeitos integrados nos elementos existentes; login/verificação encaminham para Início, com o menu ativo.
 - Migração `portal_otp_four_digits` aplicada ao Supabase e Edge Function `portal-otp` publicada, versão 2.
@@ -51,9 +51,9 @@ Proteções implementadas:
 - Tabelas no esquema `private`, RLS e ausência de privilégios diretos dos clientes. RPC de serviço executável apenas pelo `service_role`, utilizado dentro da Edge Function.
 - Limpeza de desafios/limites antigos e sessões verificadas expiradas ao iniciar desafios.
 
-## Configuração pendente
+## Configuração de outro ambiente com Resend
 
-**Neste projeto a migração já foi aplicada e a função já está publicada. Não executar novamente o esquema inicial nem os dados de exemplo.**
+**Neste projeto a migração já foi aplicada, a função está publicada e o Gmail está configurado e testado. Não executar novamente o esquema inicial nem os dados de exemplo.** Para Gmail, seguir [o guia próprio](ATIVAR_OTP_GMAIL.md). Os passos seguintes descrevem a alternativa Resend para outro ambiente.
 
 1. Preparar um remetente/domínio verificado no **Resend**. A função usa a sua API HTTP; o fornecedor tem de autorizar o envio pelo endereço escolhido.
 2. Em **Supabase → Edge Functions → Secrets**, configurar:
@@ -94,7 +94,7 @@ Durante a configuração, um administrador pode reverter a ativação com `updat
 
 Depois de instalar o esquema/permissões deste portal, executar **apenas** `supabase/migrations/20261103021624_portal_otp_four_digits.sql` no SQL Editor do outro projeto. A migração começa desativada e não recria conteúdos.
 
-Publicar `supabase/functions/portal-otp` como `portal-otp`, incluindo `deno.json`, `handler.js` e `crypto.js`. `config.toml` define `verify_jwt = false`: registo/recuperação começam sem JWT; o handler valida a palavra-passe no Auth ou a prova aleatória do desafio. Isto não concede acesso às RPCs de serviço nem dispensa RLS.
+Publicar `supabase/functions/portal-otp` como `portal-otp`, incluindo `index.ts`, `deno.json`, `handler.js`, `email.js` e `crypto.js`. `config.toml` define `verify_jwt = false`: registo/recuperação começam sem JWT; o handler valida a palavra-passe no Auth ou a prova aleatória do desafio. Isto não concede acesso às RPCs de serviço nem dispensa RLS.
 
 O histórico remoto foi criado pela integração Supabase. A migração está registada como `portal_otp_four_digits`, versão `20261103022433`; o ficheiro local foi criado pelo CLI às `02:16:24`. Não executar `db push` às cegas nem reparar o histórico sem conciliar também as migrações anteriores.
 
@@ -106,24 +106,20 @@ O histórico remoto foi criado pela integração Supabase. A migração está re
 | Estilos reutilizáveis | `style.css` |
 | Efeitos e caixa | `js/motion.js`, `js/core.js` |
 | Autenticação/formulários | `js/otp.js`, `js/api.js`, `js/forms.js`, `js/views.js` |
-| Backend | `supabase/functions/portal-otp/{index.ts,handler.js,crypto.js,deno.json,secrets.example}`, `supabase/config.toml` |
+| Backend | `supabase/functions/portal-otp/{index.ts,handler.js,email.js,crypto.js,deno.json,secrets.example}`, `supabase/config.toml` |
 | Migração | `supabase/migrations/20261103021624_portal_otp_four_digits.sql` |
-| Testes | `tests/navigation.test.mjs`, `tests/rls.test.mjs`, `tests/ui.test.mjs`, `tests/otp-backend.test.mjs`, `tests/live-otp-smoke.sql` |
+| Testes | `tests/navigation.test.mjs`, `tests/rls.test.mjs`, `tests/ui.test.mjs`, `tests/otp-backend.test.mjs`, `tests/otp-email.test.mjs`, `tests/live-otp-smoke.sql` |
 | Dependências de testes | `package.json`, `package-lock.json`, `.gitignore` |
 | Documentação | Este relatório, `README.md`, `ALTERACOES_LOGIN_REFERENCIAS.md` |
 
 ## Validação e limites
 
-- **45 testes automáticos:** rotas e sessão; OTP correto/incorreto, zero inicial, rejeição de códigos maiores, utilização única, expiração, tentativas, limites/reenvio e colisão; falhas de rede/instalação de sessão; teclado/colagem e bloqueio de submissão repetida.
+- **55 testes automáticos:** rotas e sessão; OTP correto/incorreto, zero inicial, rejeição de códigos maiores, utilização única, expiração, tentativas, limites/reenvio e colisão; falhas de rede/instalação de sessão; teclado/colagem e bloqueio de submissão repetida; configuração Gmail, contrato SMTP/TLS e mensagem MIME.
 - PostgreSQL em WASM/PGlite executa as migrações/RLS, incluindo eventos/votos, cascade, preservação na edição, ordenação e bloqueio de contas. As interfaces Auth/Storage são esquemas isolados de teste.
 - Handler da função: criptografia real; Auth e transporte de email substituídos por fixtures locais. **Estes testes não confirmam entrega de emails reais.**
 - Supabase real: `tests/live-otp-smoke.sql` aprovado com `ROLLBACK`; sessão sem código bloqueada, RPC de serviço inacessível a utilizadores, código incorreto/reutilizado recusado e sessão Auth verificada aceite. A política ficou desativada depois do teste.
 - HTTP na função publicada: `status` 200/`ready:false`, origem não autorizada 403 e GET 405. Na API pública, `otp_policy` devolveu 200/`enabled:false` e a chamada direta a `otp_service` foi recusada com 401/42501.
 - Chrome: menu/Escape e atrasos; separador preenchido e destaque anterior removido; notificação contraída até ao ponto e mensagem ainda por ler na caixa. Layout revisto em desktop e frames de 390/820 px, sem overflow horizontal dos campos.
 - OTP visual: introdução, validação, erro e sucesso revistos numa fixture isolada, identificada como simulação de serviços. A fixture não autentica contas e não é publicada.
-- `prefers-reduced-motion`: ramo JavaScript sem voo exercitado nos testes e CSS com animações/transições suprimidas. Não foi testado num telemóvel físico nem alterada a preferência de um dispositivo real.
-- `git diff --check` e verificação sintática dos módulos JavaScript.
-- Conselheiro Supabase: nenhum novo WARN/ERROR; quatro INFO esperados por RLS sem políticas em tabelas privadas deliberadamente fechadas. Mantém-se o aviso anterior sobre proteção de palavras-passe comprometidas.
-- O CLI não conseguiu listar a stack local, porque não existe PostgreSQL/Docker local; o histórico remoto foi confirmado pela API e as regras foram testadas em PGlite e no Supabase real.
-
-**Pendente:** segredos/remetente do fornecedor, ativação e teste ponta a ponta de entrega de email/sessão com uma conta própria. Não foi usada uma conta real de outra pessoa para contornar esta dependência.
+- Login real posterior à ativação: palavra-passe aceite, email entregue por Gmail, quatro dígitos confirmados pelo backend, sessão instalada e Início ativo no menu. O utilizador introduziu os segredos pela janela segura; não foram recolhidos códigos, palavras-passe ou tokens no registo do teste. O endereço exato do remetente não foi confirmado no cabeçalho da mensagem.
+- `prefers-reduced-motion`: ramo JavaScript sem voo exercitado nos testes e CSS com animações/transições suprimidas. Não foi testado num telemóvel físico nem alterada a preferência de um dispositivo rea…174 tokens truncated… de tentativas), já exercitados nos testes locais/SQL. A configuração, a ativação, a entrega de email e o login ponta a ponta estão confirmados; o endereço exato do remetente deve ser conferido no cabeçalho da mensagem recebida.

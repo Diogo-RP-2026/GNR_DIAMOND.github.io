@@ -2,7 +2,7 @@
 
 Esta opção permite usar uma conta Gmail como remetente, sem comprar domínio nem configurar Resend. O endereço Gmail escolhido aparece como remetente aos membros; pode ser uma conta dedicada à USHE.
 
-**Estado — 03/11/2026:** a função reconhece a configuração Gmail (`ready: true`, sem campos em falta) e a política OTP está ativa no Supabase. Os 55 testes locais passaram. A entrega real do email e a conclusão do código com uma conta própria ainda precisam de ser confirmadas; a preparação da configuração não comprova essa entrega.
+**Estado — 03/11/2026:** a função reconhece a configuração Gmail (`ready: true`, sem campos em falta) e a política OTP está ativa no Supabase. Os 55 testes locais passaram. Num teste real autorizado com uma conta existente, o Gmail aceitou o envio, o utilizador recebeu e introduziu o código pela janela segura, o backend confirmou a identidade e o botão **Continuar** abriu o **Início**, com essa opção ativa no menu (`aria-current="page"`). Nenhuma conta foi criada nem foram alteradas permissões para realizar o teste.
 
 ## 1. Preparar a conta Google
 
@@ -67,6 +67,8 @@ O envio fica sujeito aos limites e controlos da conta Gmail. Esta opção destin
 - Os testes anteriores de RLS, eventos, votos, contas, navegação e OTP continuam a ser executados por `npm test`.
 - Nodemailer está fixado em 10.3.1 no runtime e no lockfile npm dos testes; a mensagem MIME foi gerada com a biblioteca real, sem contactar o servidor Gmail.
 - O cache de dependências pelo CLI Deno local não conseguiu aceder ao registo npm; o arranque da função com a dependência real foi confirmado no Supabase publicado.
-- Não foi usado um email ou palavra-passe real nos testes. A autenticação Gmail e entrega de emails ainda dependem dos segredos e do teste com a conta escolhida.
+- Teste real adicional no portal publicado: autenticação por palavra-passe, envio SMTP Gmail, receção e validação do código, instalação da sessão e redirecionamento para Início confirmados. Credenciais e código foram introduzidos pela janela segura, sem serem lidos ou registados pelo assistente.
+- A interface do teste não expõe o endereço configurado como remetente. O seu endereço exato no cabeçalho da mensagem não foi verificado nesta execução.
+- Registo, recuperação, reenvio, expiração e restantes recusas foram cobertos pelos testes locais/SQL descritos no relatório; ainda não foram repetidos ponta a ponta com emails reais. Não confundir estes testes com o login real concluído.
 
 Referências oficiais: [Google — palavras-passe de aplicações](https://support.google.com/accounts/answer/185833), [Google — verificação em dois passos](https://support.google.com/accounts/answer/185839), [Google — limites de envio](https://support.google.com/mail/answer/22839), [Supabase — limites das Edge Functions](https://supabase.com/docs/guides/functions/limits), [Nodemailer — SMTP/TLS](https://nodemailer.com/smtp).

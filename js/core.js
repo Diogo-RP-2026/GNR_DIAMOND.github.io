@@ -53,10 +53,7 @@ export function errorMessage(error) {
   const translations = {'Invalid login credentials':'Email ou palavra-passe incorretos.','Email not confirmed':'Confirma o teu email antes de entrar.','User already registered':'Já existe uma conta com este email.','New password should be different from the old password.':'Escolhe uma palavra-passe diferente da anterior.','Failed to fetch':'Não foi possível ligar ao serviço. Verifica a ligação à Internet.'};
   return translations[message] || message;
 }
-export function toast(message, error=false) {
-  const el=document.querySelector('#toast'); el.textContent=message; el.classList.toggle('error',error); el.hidden=false;
-  clearTimeout(toast.timer); toast.timer=setTimeout(()=>{el.hidden=true;},6500);
-}
+export function toast(message,error=false) {document.dispatchEvent(new CustomEvent('ushe:notify',{detail:{message,error}}));}
 export function empty(text='Ainda não existem registos nesta secção.') {return `<div class="empty"><span>◇</span><p>${e(text)}</p></div>`;}
 export function heading(kicker,title,subtitle='',action='') {return `<div class="page-heading"><div><p class="eyebrow">${e(kicker)}</p><h1>${e(title)}</h1>${subtitle?`<p class="muted">${e(subtitle)}</p>`:''}</div>${action}</div>`;}
 export const button = (action,label,attributes='')=>`<button type="button" class="button" data-action="${action}" ${attributes}>${e(label)}</button>`;

@@ -12,6 +12,7 @@ test('permissões, votos, documentos e fotografias são protegidos por PostgreSQ
   const as=async(role,id='')=>{await db.exec('reset role');await sql("select set_config('request.jwt.claim.sub',$1,false)",[id]);await db.exec(`set role ${role}`);};
   await db.exec(`create role anon; create role authenticated; create role service_role; create schema auth; create schema storage;
     create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb default '{}');
+    create table auth.sessions(id uuid primary key,user_id uuid references auth.users(id));
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
     grant usage on schema auth,storage,public to anon,authenticated;
     grant execute on function auth.uid() to anon,authenticated;
@@ -23,6 +24,7 @@ test('permissões, votos, documentos e fotografias são protegidos por PostgreSQ
   await db.exec(await readFile(new URL('../supabase/02_seed.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('../supabase/04_estatisticas_publicas.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('../supabase/05_eventos_contas.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('../supabase/migrations/20261103021624_portal_otp_four_digits.sql',import.meta.url),'utf8'));
   for(const [name,id] of Object.entries(uid))await sql('insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3)',[id,`${name}@example.test`,JSON.stringify({full_name:name,role:'command',approved:true})]);
   await sql("update public.profiles set role='command',approved=true where id=$1",[uid.admin]);
   const event='e0000000-0000-4000-8000-000000000001';
@@ -180,6 +182,62 @@ test('permissões, votos, documentos e fotografias são protegidos por PostgreSQ
     const metrics=(await sql('select public.unit_statistics() as data')).rows[0].data;
     assert.equal(metrics.training_count,1);assert.deepEqual(Object.keys(metrics).sort(),['member_count','rank_count','training_count']);
     await assert.rejects(sql('select * from public.event_logs'),/permission denied/);
+  });
+  await t.test('OTP backend: privilégio de serviço, tentativas, expiração, reenvio, uso único e sessão obrigatória',async()=>{
+    const session='20000000-0000-4000-8000-000000000001';let number=0;
+    await as('postgres');
+    await sql('insert into auth.sessions(id,user_id) values($1,$2)',[session,uid.other]);
+    const service=async(action,args)=>{await as('service_role');return (await sql('select public.otp_service($1,$2) as data',[action,args])).rows[0].data;};
+    const issue=async(operation='login')=>{
+      await as('postgres');await sql("update private.otp_challenges set created_at=now()-interval '2 minutes'");
+      const id='30000000-0000-4000-8000-'+String(++number).padStart(12,'0');
+      assert.equal((await service('issue',{id,user_id:uid.other,operation,code_hash:'hash-0007',proof_hash:'proof',payload:'encrypted-session'})).ok,true);return {id,proof_hash:'proof'};
+    };
+    await as('authenticated',uid.other);
+    await assert.rejects(sql("select public.otp_service('grant','{}')"),/permission denied/);
+    await assert.rejects(sql('select * from private.otp_challenges'),/permission denied/);
+    let args=await issue();
+    assert.equal((await service('verify',{...args,proof_hash:'stolen-or-wrong',code_hash:'hash-0007'})).error,'invalid');
+    assert.equal((await service('verify',{...args,code_hash:'wrong'})).error,'invalid');
+    await as('postgres');assert.equal((await sql('select attempts from private.otp_challenges where id=$1',[args.id])).rows[0].attempts,1);
+    for(let i=0;i<4;i++)await service('verify',{...args,code_hash:'wrong'});
+    assert.equal((await service('verify',{...args,code_hash:'hash-0007'})).error,'attempts');
+    args=await issue();await as('postgres');await sql("update private.otp_challenges set expires_at=now()-interval '1 second' where id=$1",[args.id]);
+    assert.equal((await service('verify',{...args,code_hash:'hash-0007'})).error,'expired');
+    await as('postgres');await sql("update private.otp_challenges set sent_at=now()-interval '61 seconds' where id=$1",[args.id]);
+    assert.equal((await service('resend',{...args,code_hash:'hash-0007'})).error,'collision');
+    assert.equal((await service('resend',{...args,code_hash:'hash-new'})).ok,true);
+    assert.equal((await service('resend',{...args,code_hash:'hash-other'})).error,'rate_limit');
+    assert.equal((await service('verify',{...args,code_hash:'hash-0007'})).error,'invalid');
+    assert.equal((await service('verify',{...args,code_hash:'hash-new'})).ok,true);
+    assert.equal((await service('verify',{...args,code_hash:'hash-new'})).error,'used');
+    const previous=await issue();await issue();assert.equal((await service('verify',{...previous,code_hash:'hash-0007'})).error,'used');
+    args=await issue();
+    for(let i=0;i<3;i++) {
+      await as('postgres');await sql("update private.otp_challenges set sent_at=now()-interval '61 seconds' where id=$1",[args.id]);
+      assert.equal((await service('resend',{...args,code_hash:'hash-resend-'+i})).ok,true);
+    }
+    await as('postgres');await sql("update private.otp_challenges set sent_at=now()-interval '61 seconds' where id=$1",[args.id]);
+    assert.equal((await service('resend',{...args,code_hash:'hash-resend-fourth'})).error,'rate_limit');
+    for(let i=0;i<5;i++)assert.equal((await service('limit',{key:'email-limit',max:5})).ok,true);
+    assert.equal((await service('limit',{key:'email-limit',max:5})).ok,false);
+    await as('postgres');await sql("update private.otp_limits set started_at=now()-interval '16 minutes' where key='email-limit'");
+    assert.equal((await service('limit',{key:'email-limit',max:5})).ok,true);
+    await as('postgres');await sql('update private.otp_settings set enabled=true');
+    await as('authenticated',uid.other);
+    await sql("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({sub:uid.other,session_id:session,role:'authenticated'})]);
+    assert.equal((await sql('select public.otp_session_verified() as ok')).rows[0].ok,false);
+    assert.equal((await sql('select * from public.events')).rows.length,0);
+    assert.equal((await sql('select * from public.profiles')).rows.length,0);
+    await assert.rejects(sql('select public.response_names($1,$2)',['event',event]),/Acesso não autorizado/);
+    assert.equal((await service('grant',{session_id:session,user_id:uid.member})).error,'session');
+    assert.equal((await service('grant',{session_id:session,user_id:uid.other})).ok,true);
+    await as('authenticated',uid.other);assert.equal((await sql('select public.otp_session_verified() as ok')).rows[0].ok,true);
+    assert.ok((await sql('select * from public.events')).rows.length>0);
+    await as('postgres');await sql("update private.verified_sessions set expires_at=now()-interval '1 second' where session_id=$1",[session]);
+    await as('authenticated',uid.other);assert.equal((await sql('select public.otp_session_verified() as ok')).rows[0].ok,false);
+    await as('postgres');await sql('delete from auth.sessions where id=$1',[session]);
+    await as('authenticated',uid.other);assert.equal((await sql('select public.otp_session_verified() as ok')).rows[0].ok,false);
   });
   await db.close();
 });

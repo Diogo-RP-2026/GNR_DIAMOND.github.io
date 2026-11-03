@@ -5,17 +5,18 @@ import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 const source=(await readFile(new URL('../script.js',import.meta.url),'utf8'))
   .replace(/^import .*;\n/gm,'').replace(/\ninit\(\);\s*$/,'\nglobalThis.testAPI={render,navigation};');
-function setup({hash='#/entrar',signedIn=true,recovery=false,loginError=false}={}) {
+function setup({hash='#/entrar',signedIn=true,recovery=false,loginError=false,otp=null}={}) {
   const nodes=new Map(),listeners={};
-  const node=()=>({innerHTML:'',className:'',textContent:'',hidden:false,attrs:{},classList:{remove(){},toggle(){}},setAttribute(k,v){this.attrs[k]=v;},removeAttribute(k){delete this.attrs[k];},addEventListener(){},querySelectorAll(){return [];},querySelector(){return {textContent:'Teste'};},focus(){}});
+  const node=()=>({innerHTML:'',className:'',textContent:'',hidden:false,attrs:{},classList:{remove(){},toggle(){}},setAttribute(k,v){this.attrs[k]=v;},removeAttribute(k){delete this.attrs[k];},addEventListener(){},querySelectorAll(){return [];},querySelector(selector){return selector==='h1'?{textContent:'Teste'}:null;},focus(){}});
   const document={querySelector(key){if(!nodes.has(key))nodes.set(key,node());return nodes.get(key);},addEventListener(k,fn){listeners[k]=fn;}};
-  const state={user:signedIn?{id:'user'}:null,profile:{approved:true,role:'member',full_name:'Teste'},permissions:[],publicInfo:null,recovery};
+  const state={user:signedIn?{id:'user'}:null,profile:{approved:true,role:'member',full_name:'Teste'},permissions:[],publicInfo:null,recovery,otp};
   const location={hash,replacements:[],replace(value){this.hash=value;this.replacements.push(value);}};
   const views=new Proxy({filterPage(){}},{get(target,key){return target[key]||(()=>({html:`<h1>${key}</h1>`}));}});
   let error=null;
   const context={document,state,location,views,URLSearchParams,console,
     window:{scrollY:0,scrollTo(){},addEventListener(){}},
     db:{auth:{async getSession(){return {data:{session:{user:{id:'user'}}},error:null};}}},
+    initMotion(){},initOTP(){},clearNotifications(){},setMenu(){},syncNavigation(nav,html){nav.innerHTML=html;},
     e:String,TABS:[['eventos','Eventos']],toast(){},errorMessage:String,empty:String,discordURL:()=>'',
     isCommand:()=>false,hasTab:()=>true,loadIdentity:async()=>{},hydrateImages:async()=>{},releaseImages(){},
     result:async q=>{const r=await q;if(r.error)throw r.error;return r.data;},
@@ -63,4 +64,10 @@ test('área da conta continua acessível pelo cabeçalho e menu móvel',async()=
 });
 test('área da conta sem sessão encaminha para login',async()=>{
   const x=setup({hash:'#/conta',signedIn:false});await x.render({identity:false});assert.equal(x.location.hash,'#/entrar');
+});
+test('verificação pendente impede abrir páginas protegidas e mantém o ecrã de verificação',async()=>{
+  const x=setup({hash:'#/eventos',otp:{status:'input'},signedIn:false});
+  await x.render({identity:false});assert.equal(x.location.hash,'#/entrar');
+  assert.ok(!x.nodes.get('main').innerHTML.includes('<h1>events</h1>'));
+  await x.render({identity:false});assert.equal(x.location.hash,'#/entrar');
 });

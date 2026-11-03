@@ -1,8 +1,10 @@
 # USHE — Unidade de Segurança e Honras do Estado
 
+**Atualização de 03/11/2026:** efeitos de interface e backend de verificação de quatro dígitos implementados. A ativação dos códigos aguarda o fornecedor de email/segredos; consultar [instalação, estado e testes](ALTERACOES_MOVIMENTO_OTP.md).
+
 Portal institucional da cidade Diamond em português de Portugal. HTML, CSS e JavaScript sem compilação, com Supabase para autenticação, Postgres e fotografias privadas. O alojamento dos ficheiros é feito no GitHub Pages.
 
-**Estado da instalação:** o esquema, os conteúdos iniciais, as políticas RLS e o bucket privado foram instalados no projeto Supabase `GNR_DIAMOND.github.io`. A URL e a chave pública estão configuradas em `config.js`. O endereço GitHub Pages e os dois redirecionamentos de produção já estão guardados em Authentication → URL Configuration. Falta criar a primeira conta Auth e promover o email escolhido a Comando com `03_primeiro_comando.sql`. O envio de emails usa ainda o serviço padrão do Supabase; falta configurar um fornecedor SMTP para utilização regular pelos membros. Os passos abaixo também permitem reinstalar o portal num projeto novo.
+**Estado da instalação:** o esquema, os conteúdos iniciais, as políticas RLS e o bucket privado foram instalados no projeto Supabase `GNR_DIAMOND.github.io`; já existem contas e Comando configurado. A URL e a chave pública estão em `config.js`. O endereço GitHub Pages e os redirecionamentos de produção estão guardados em Authentication → URL Configuration. O envio anterior usa o serviço padrão do Supabase; o novo envio de códigos precisa da configuração descrita no relatório acima. Os passos abaixo também permitem reinstalar o portal num projeto novo.
 
 As funções privilegiadas ficam no esquema `private`; a API pública usa funções `SECURITY INVOKER` que chamam apenas as operações explicitamente autorizadas. As verificações reais da API confirmaram que visitantes leem estatísticas e contactos, mas não os membros, perfis ou corpos dos anúncios.
 

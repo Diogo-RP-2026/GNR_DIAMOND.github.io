@@ -9,14 +9,18 @@ export const configured = /^https:\/\/[a-z0-9-]+\.supabase\.(co|in)$/.test(confi
 export const db=configured?window.supabase.createClient(config.supabaseUrl,config.supabasePublishableKey,{
   auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true},
 }):null;
-export const state={user:null,profile:null,permissions:[],publicInfo:null,recovery:false};
+export const state={user:null,profile:null,permissions:[],publicInfo:null,recovery:false,otp:null,otpEnabled:false};
 export const isCommand=()=>state.profile?.approved && state.profile?.role==='command';
 export const hasTab=tab=>!!(state.profile?.approved && (isCommand() || state.permissions.some(p=>p.tab===tab)));
 export const canLog=()=>isCommand() || (hasTab('registos') && state.permissions.some(p=>p.tab==='registos' && p.can_create));
 export async function result(query) {const {data,error}=await query;if(error)throw error;return data;}
 export async function loadIdentity() {
   state.profile=null;state.permissions=[];
-  if(!db || !state.user)return;
+  if(!db || !state.user || state.otp)return;
+  // Uma sessão obtida diretamente no Auth não dispensa a verificação no servidor.
+  if(state.otpEnabled && !(await result(db.rpc('otp_session_verified')))) {
+    await result(db.auth.signOut({scope:'local'}));state.user=null;return;
+  }
   const [profile,permissions]=await Promise.all([
     result(db.from('profiles').select('*').eq('id',state.user.id).maybeSingle()),
     result(db.from('tab_permissions').select('*').eq('user_id',state.user.id)),
@@ -63,4 +67,12 @@ export async function upload(file,tab) {
   const path=`${tab}/${crypto.randomUUID()}.${ext}`;
   await result(db.storage.from('ushe-media').upload(path,file,{contentType:file.type,upsert:false}));
   return path;
+}
+
+// Compatibilidade com projetos em que a migração OTP ainda não foi instalada.
+export async function loadOtpPolicy() {
+  const {data,error}=await db.rpc('otp_policy');
+  if(error&&error.code!=='PGRST202')throw error;
+  state.otpEnabled=!error&&data?.enabled===true;
+  return state.otpEnabled;
 }

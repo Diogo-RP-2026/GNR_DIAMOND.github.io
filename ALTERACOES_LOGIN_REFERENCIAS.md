@@ -1,5 +1,7 @@
 # Login e referências de animação — 03/11/2026
 
+**Atualização:** os cinco vídeos foram entretanto fornecidos e analisados; os efeitos e o backend OTP foram implementados. A configuração de envio/ativação ainda está pendente. Ver [estado atual e instruções](ALTERACOES_MOVIMENTO_OTP.md). As limitações de acesso às referências descritas abaixo correspondem à entrega anterior.
+
 ## Implementado
 
 - Após login bem-sucedido, o utilizador vai para `#/` (Início), marcado com `aria-current="page"` no menu existente.

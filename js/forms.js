@@ -1,6 +1,7 @@
+import {startOTP} from './otp.js';
 // Formulários reutilizáveis. Os documentos com participantes usam funções SQL atómicas.
 import {e,RANKS,PIECES,TABS,lisbonInput,lisbonISO,dateRange,discordURL,errorMessage,toast,uniform} from './core.js';
-import {db,state,isCommand,canManageEvent,canLog,hasTab,result,rpc,save,upload,releaseImages} from './api.js';
+import {db,state,loadOtpPolicy,isCommand,canManageEvent,canLog,hasTab,result,rpc,save,upload,releaseImages} from './api.js';
 
 const fields={
   members:[['uniform_number','Número de uniforme','number',true],['name','Nome','text',true],['callsign','Indicativo','text'],['rank','Patente','select',true,RANKS],['active','Elemento no ativo','checkbox']],
@@ -116,6 +117,7 @@ export async function deleteRecord(table,id,cache) {
 }
 export async function submitAuth(form) {
   if(!db)throw new Error('A área reservada ainda não foi ativada. Contacta o Comando para mais informações.');
+  if(form.dataset.mode!=='password'){await loadOtpPolicy();if(state.otpEnabled){await startOTP(form);return;}}
   const fd=new FormData(form),mode=form.dataset.mode,email=String(fd.get('email')||'').trim(),password=String(fd.get('password')||'');
   const redirect=new URL('./',window.location.href);redirect.hash='/entrar';redirect.search='';
   if(['signup','password'].includes(mode)&&password!==fd.get('confirmation'))throw new Error('As palavras-passe não coincidem.');

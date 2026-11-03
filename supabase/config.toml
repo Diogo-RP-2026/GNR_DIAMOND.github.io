@@ -1,0 +1,4 @@
+# A função valida palavra-passe ou prova aleatória no seu próprio handler.
+# Registo e recuperação começam antes de existir um JWT de utilizador.
+[functions.portal-otp]
+verify_jwt = false

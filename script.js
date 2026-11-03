@@ -1,6 +1,8 @@
+import {initMotion,setMenu,syncNavigation,clearNotifications} from './js/motion.js';
+import {initOTP} from './js/otp.js';
 // Ponto de entrada: navegação por fragmento (#/), compatível com GitHub Pages.
 import {e,TABS,toast,errorMessage,empty,discordURL} from './js/core.js';
-import {db,state,isCommand,hasTab,loadIdentity,hydrateImages,releaseImages,result,rpc} from './js/api.js';
+import {db,state,isCommand,hasTab,loadIdentity,loadOtpPolicy,hydrateImages,releaseImages,result,rpc} from './js/api.js';
 import * as views from './js/views.js';
 import {openEditor,openAccess,closeEditor,isDirty,submitContent,submitAccess,submitAuth,deleteRecord,formError} from './js/forms.js';
 
@@ -14,7 +16,7 @@ function route() {
 function navigation() {
   const current=route().name;
   const links=[['','Início'],...TABS.filter(([key])=>hasTab(key)),['contactos','Contactos'],...(isCommand()?[['administracao','Administração']]:[])];
-  document.querySelector('#main-nav').innerHTML=`<div class="nav-inner">${links.map(([key,label])=>`<a href="#/${key}" ${current===key?'aria-current="page"':''}>${e(label)}</a>`).join('')}<a class="mobile-account" href="${state.user?'#/conta':'#/entrar'}">${state.user?e(state.profile?.full_name || 'A minha conta'):'Entrar'}</a></div>`;
+  syncNavigation(document.querySelector('#main-nav'),`<div class="nav-inner">${links.map(([key,label])=>`<a href="#/${key}" ${current===key?'aria-current="page"':''}>${e(label)}</a>`).join('')}<a class="mobile-account" href="${state.user?'#/conta':'#/entrar'}">${state.user?e(state.profile?.full_name || 'A minha conta'):'Entrar'}</a></div>`);
   const account=document.querySelector('#header-account');account.textContent=state.user?(state.profile?.full_name || 'A minha conta'):'Entrar';
   account.setAttribute('href',state.user?'#/conta':'#/entrar');
   if(current==='entrar'||current==='conta')account.setAttribute('aria-current','page');else account.removeAttribute('aria-current');
@@ -25,13 +27,15 @@ function navigation() {
 }
 async function render({preserveScroll=false,identity=true}={}) {
   const seq=++renderSequence,scroll=window.scrollY;
+  const previousTab=main.querySelector('.admin-tabs a.active')?.getAttribute?.('href');
   releaseImages(main);cache={};main.innerHTML='<div class="container loading" role="status">A carregar…</div>';
   try {
     if(identity)await loadIdentity();
     if(seq!==renderSequence)return;
     const r=route();
+    if(state.otp&&r.name!=='entrar'){location.replace('#/entrar');return;}
     // A recuperação de palavra-passe tem de continuar acessível com sessão.
-    if(r.name==='entrar'&&state.user&&!state.recovery){location.replace('#/');return;}
+    if(r.name==='entrar'&&state.user&&!state.recovery&&!state.otp){location.replace('#/');return;}
     if(r.name==='conta'&&!state.user){location.replace('#/entrar');return;}
     navigation();
     let page;
@@ -44,21 +48,21 @@ async function render({preserveScroll=false,identity=true}={}) {
     else if(protectedPages[r.name])page=hasTab(r.name)?await protectedPages[r.name]():views.restricted();
     else page={html:`<section class="container page"><h1>Página não encontrada</h1>${empty('Este endereço não corresponde a uma secção do portal.')}<a class="button" href="#/">Voltar ao Início</a></section>`};
     if(seq!==renderSequence)return;
-    main.innerHTML=page.html;cache=page.cache || {};
+    main.innerHTML=page.html;
+    if(previousTab)main.querySelectorAll('.admin-tabs a:not(.active)').forEach(a=>{if(a.getAttribute('href')===previousTab)a.classList.add('ripple-leaving');});
+    cache=page.cache || {};
     main.className=r.name?'route-content':'home-content';
     document.title=r.name?`${main.querySelector('h1')?.textContent || 'USHE'} – USHE`:'USHE – Unidade de Segurança e Honras do Estado';
     views.filterPage(main);await hydrateImages(main);
     if(seq!==renderSequence)return;
     if(preserveScroll)window.scrollTo({top:scroll,behavior:'instant'});
-    else {window.scrollTo({top:0,behavior:'instant'});main.focus({preventScroll:true});}
+    else {window.scrollTo({top:0,behavior:'instant'});(main.querySelector('#otp-continue:not([hidden]),.otp-digit:not(:disabled)') || main).focus({preventScroll:true});}
   } catch(error) {
     if(seq!==renderSequence)return;
     main.innerHTML=`<section class="container page"><h1>Não foi possível carregar a secção.</h1><p class="notice">${e(errorMessage(error))}</p><button class="button" data-action="refresh">Tentar novamente</button></section>`;
   }
 }
-document.querySelector('#menu-toggle').addEventListener('click',event=>{
-  const expanded=event.currentTarget.getAttribute('aria-expanded')!=='true';event.currentTarget.setAttribute('aria-expanded',expanded);document.querySelector('#main-nav').classList.toggle('open',expanded);
-});
+document.querySelector('#menu-toggle').addEventListener('click',event=>setMenu(event.currentTarget.getAttribute('aria-expanded')!=='true'));
 document.querySelector('#close-editor').addEventListener('click',()=>closeEditor());
 dialog.addEventListener('cancel',event=>{event.preventDefault();closeEditor();});
 dialog.addEventListener('input',event=>{if(event.target.closest('form'))event.target.closest('form').dataset.dirty='true';});
@@ -77,7 +81,7 @@ document.addEventListener('click',async event=>{
   const link=event.target.closest('a[href^="#/"]');
   if(link) {
     if(dialog.open&&!closeEditor()){event.preventDefault();return;}
-    document.querySelector('#main-nav').classList.remove('open');document.querySelector('#menu-toggle').setAttribute('aria-expanded','false');
+    setMenu(false);
   }
   const el=event.target.closest('[data-action]');if(!el || el.disabled)return;
   const {action,table,id}=el.dataset;
@@ -115,6 +119,7 @@ document.addEventListener('submit',async event=>{
       await submitAuth(form);
       const session=await result(db.auth.getSession());state.user=session.session?.user || null;
       await loadIdentity();
+      if(state.otp){state.user=null;location.hash='/entrar';await render();return;}
       if(form.dataset.mode==='reset'){form.reset();return;}
       location.hash=state.user&&!state.recovery?'/':'/entrar';await render();
     } else {
@@ -128,9 +133,11 @@ window.addEventListener('hashchange',()=>render());
 async function init() {
   if(db) {
     db.auth.onAuthStateChange((event,session)=>{
+      if(state.user?.id!==session?.user?.id)clearNotifications();
       state.user=session?.user || null;
       if(event==='PASSWORD_RECOVERY'){state.recovery=true;location.hash='/entrar';}
       if(event==='SIGNED_OUT') {
+        state.otp=null;clearNotifications();
         state.profile=null;state.permissions=[];cache={};++renderSequence;releaseImages(main);main.replaceChildren();closeEditor(true);navigation();
       }
       // O callback de Auth é síncrono: consultas novas decorrem fora do seu bloqueio.
@@ -138,7 +145,11 @@ async function init() {
         clearTimeout(authTimer);authTimer=setTimeout(()=>render(),0);
       }
     });
-    try {const s=await result(db.auth.getSession());state.user=s.session?.user || null;}
+    try {
+      await loadOtpPolicy();
+      const s=await result(db.auth.getSession());state.user=s.session?.user || null;
+      if(state.user&&state.otpEnabled&&!(await rpc('otp_session_verified'))){await db.auth.signOut({scope:'local'});state.user=null;}
+    }
     catch(error){toast(errorMessage(error),true);}
   }
   state.publicInfo=await views.publicInfo();ready=true;await render();
@@ -153,4 +164,6 @@ async function init() {
     }catch { /* Uma falha temporária não substitui os dados visíveis; novas operações continuam protegidas. */ }
   },45000);
 }
+initMotion();
+initOTP({render,goHome:recovering=>{location.hash=recovering?'/entrar':'/';render();}});
 init();

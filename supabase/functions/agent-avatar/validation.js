@@ -1,3 +1,4 @@
+import {Image} from 'imagescript';
 export const MAX_BYTES=5*1024*1024;
 export function validateImage(bytes,mime) {
  if(!bytes.length||bytes.length>MAX_BYTES)throw new Error('A fotografia pode ter no máximo 5 MB.');
@@ -16,4 +17,18 @@ export async function readLimitedBody(req,max=MAX_BYTES+65536) {
  try {while(true){const {done,value}=await reader.read();if(done)break;total+=value.length;if(total>max){await reader.cancel();throw new Error('A fotografia pode ter no máximo 5 MB.');}chunks.push(value);}}
  finally{reader.releaseLock();}
  const output=new Uint8Array(total);let offset=0;for(const chunk of chunks){output.set(chunk,offset);offset+=chunk.length;}return output;
+}
+
+// Decoding rejects corrupt/truncated files that merely imitate a magic signature.
+// Pixel cap is enforced by the decoder before allocation; re-encoding removes extra payloads/metadata.
+export async function normalizeImage(bytes,mime) {
+ validateImage(bytes,mime);
+ try {
+  const image=await Image.decode(bytes,{maxPixels:4000000,threads:1,applyColorProfile:false});
+  if(image.width>4096||image.height>4096)throw new Error('dimensions');
+  image.metadata=undefined;
+  const output=await image.encodeJPEG(85);
+  if(output.length>MAX_BYTES)throw new Error('size');
+  return {bytes:output,mime:'image/jpeg',extension:'jpg'};
+ }catch{throw new Error('Ficheiro inválido. Usa uma fotografia válida até 4 megapíxeis e 4096 píxeis por lado.');}
 }

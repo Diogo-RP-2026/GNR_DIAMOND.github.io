@@ -9,10 +9,11 @@ test('permissões, votos, documentos e fotografias são protegidos por PostgreSQ
   const db=new PGlite();
   const sql=async(q,p=[])=>db.query(q,p);
   const uid={admin:'10000000-0000-4000-8000-000000000001',member:'10000000-0000-4000-8000-000000000002',pending:'10000000-0000-4000-8000-000000000003',other:'10000000-0000-4000-8000-000000000004'};
-  const as=async(role,id='')=>{await db.exec('reset role');await sql("select set_config('request.jwt.claim.sub',$1,false)",[id]);await db.exec(`set role ${role}`);};
+  const sessions=Object.fromEntries(Object.entries(uid).map(([k,v])=>[v,v.replace('10000000','11000000')]));
+  const as=async(role,id='')=>{await db.exec('reset role');await sql("select set_config('request.jwt.claim.sub',$1,false)",[id]);await sql("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({sub:id,session_id:sessions[id],role,exp:Math.floor(Date.now()/1000)+3600})]);await db.exec(`set role ${role}`);};
   await db.exec(`create role anon; create role authenticated; create role service_role; create schema auth; create schema storage;
-    create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb default '{}');
-    create table auth.sessions(id uuid primary key,user_id uuid references auth.users(id));
+    create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb default '{}',banned_until timestamptz,deleted_at timestamptz,is_anonymous boolean default false);
+    create table auth.sessions(id uuid primary key,user_id uuid references auth.users(id),not_after timestamptz);
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
     grant usage on schema auth,storage,public to anon,authenticated;
     grant execute on function auth.uid() to anon,authenticated;
@@ -26,7 +27,9 @@ test('permissões, votos, documentos e fotografias são protegidos por PostgreSQ
   await db.exec(await readFile(new URL('../supabase/05_eventos_contas.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('../supabase/migrations/20261103021624_portal_otp_four_digits.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('../supabase/migrations/20261103201646_agent_profiles.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('../supabase/migrations/20261103214002_security_audit_hardening.sql',import.meta.url),'utf8'));
   for(const [name,id] of Object.entries(uid))await sql('insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3)',[id,`${name}@example.test`,JSON.stringify({full_name:name,role:'command',approved:true})]);
+  for(const id of Object.values(uid))await sql('insert into auth.sessions(id,user_id) values($1,$2)',[sessions[id],id]);
   await sql("update public.profiles set role='command',approved=true where id=$1",[uid.admin]);
   const event='e0000000-0000-4000-8000-000000000001';
   await t.test('anon recebe só títulos e contagem; não recebe dados internos',async()=>{
@@ -148,7 +151,8 @@ test('permissões, votos, documentos e fotografias são protegidos por PostgreSQ
   });
   await t.test('fotografias privadas obedecem à aba; só Comando carrega',async()=>{
     await as('authenticated',uid.admin);
-    await sql("insert into storage.objects(bucket_id,name) values('ushe-media','fardamento/test.png')");
+    await assert.rejects(sql("insert into storage.objects(bucket_id,name) values('ushe-media','fardamento/direct.png')"),/row-level security/);
+    await as('postgres');await sql("insert into storage.objects(bucket_id,name) values('ushe-media','fardamento/test.png')");
     await as('authenticated',uid.member);
     assert.equal((await sql('select * from storage.objects')).rows.length,0);
     await assert.rejects(sql("insert into storage.objects(bucket_id,name) values('ushe-media','fardamento/mau.png')"),/row-level security/);
@@ -320,9 +324,9 @@ test('permissões, votos, documentos e fotografias são protegidos por PostgreSQ
     await as('authenticated',uid.other);
     const linked=(await sql('select id from public.members where user_id=$1',[uid.other])).rows[0].id;
     await sql('select public.save_agent_personal($1,$2,null)',[linked,'Perfil protegido por OTP']);
-    await as('postgres');await sql('update private.otp_settings set enabled=true');
+    await as('postgres');await sql('update private.otp_settings set enabled=true');sessions[uid.other]=session;
     await as('authenticated',uid.other);
-    await sql("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({sub:uid.other,session_id:session,role:'authenticated'})]);
+    await sql("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({sub:uid.other,session_id:session,role:'authenticated',exp:Math.floor(Date.now()/1000)+3600})]);
     assert.equal((await sql('select public.otp_session_verified() as ok')).rows[0].ok,false);
     assert.equal((await sql('select * from public.events')).rows.length,0);
     assert.equal((await sql('select * from public.profiles')).rows.length,0);
@@ -339,6 +343,41 @@ test('permissões, votos, documentos e fotografias são protegidos por PostgreSQ
     await as('authenticated',uid.other);assert.equal((await sql('select public.otp_session_verified() as ok')).rows[0].ok,false);
     await as('postgres');await sql('delete from auth.sessions where id=$1',[session]);
     await as('authenticated',uid.other);assert.equal((await sql('select public.otp_session_verified() as ok')).rows[0].ok,false);
+  });
+  await t.test('audit: revoked, banned, anonymous and expired sessions deny RLS even with OTP disabled',async()=>{
+    await as('postgres');await sql('update private.otp_settings set enabled=false');
+    await as('authenticated',uid.admin);assert.equal((await sql('select public.otp_session_verified() ok')).rows[0].ok,true);
+    for(const update of ["banned_until=now()+interval '1 hour'","deleted_at=now()","is_anonymous=true"]){
+      await as('postgres');await sql('update auth.users set '+update+' where id=$1',[uid.admin]);
+      await as('authenticated',uid.admin);assert.equal((await sql('select public.otp_session_verified() ok')).rows[0].ok,false);
+      assert.equal((await sql('select * from public.members')).rows.length,0);
+      await as('postgres');await sql('update auth.users set banned_until=null,deleted_at=null,is_anonymous=false where id=$1',[uid.admin]);
+    }
+    await sql("update auth.sessions set not_after=now()-interval '1 second' where id=$1",[sessions[uid.admin]]);
+    await as('authenticated',uid.admin);assert.equal((await sql('select public.otp_session_verified() ok')).rows[0].ok,false);
+    await as('postgres');await sql('update auth.sessions set not_after=null where id=$1',[sessions[uid.admin]]);
+    await as('authenticated',uid.admin);
+    for(const claims of [{sub:uid.admin,session_id:sessions[uid.admin],exp:1},{sub:uid.admin,exp:9999999999},{sub:uid.admin,session_id:'malformed',exp:9999999999}]){
+      await sql("select set_config('request.jwt.claims',$1,false)",[JSON.stringify(claims)]);
+      assert.equal((await sql('select public.otp_session_verified() ok')).rows[0].ok,false);
+    }
+    await as('postgres');await sql('delete from auth.sessions where id=$1',[sessions[uid.admin]]);
+    await as('authenticated',uid.admin);assert.equal((await sql('select public.otp_session_verified() ok')).rows[0].ok,false);
+    await as('postgres');await sql('insert into auth.sessions(id,user_id) values($1,$2)',[sessions[uid.admin],uid.admin]);
+  });
+  await t.test('audit: upload quota fixed on backend and official uploads require Comando',async()=>{
+    await as('authenticated',uid.admin);
+    for(let i=0;i<20;i++)assert.equal((await sql("select public.reserve_portal_upload('equipa') ok")).rows[0].ok,true);
+    assert.equal((await sql("select public.reserve_portal_upload('equipa') ok")).rows[0].ok,false);
+    await as('authenticated',uid.member);
+    assert.equal((await sql("select public.reserve_portal_upload('equipa') ok")).rows[0].ok,false);
+    await as('anon');await assert.rejects(sql('select public.reserve_portal_upload(null)'),/permission denied/);
+  });
+  await t.test('audit: infinite dates, oversized content and null access assignments rejected in database',async()=>{
+    await as('authenticated',uid.admin);
+    await assert.rejects(sql("insert into public.events(title,description,starts_at,ends_at,location) values('Bad date','test','-infinity','infinity','test')"),/check constraint/);
+    await assert.rejects(sql("update public.uniforms set notes=repeat('x',12001)"),/check constraint/);
+    await assert.rejects(sql('select public.set_user_access($1,null,true,null)',[uid.member]),/Permissões inválidas/);
   });
   await db.close();
 });

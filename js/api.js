@@ -17,6 +17,9 @@ export async function result(query) {const {data,error}=await query;if(error)thr
 export async function loadIdentity() {
   state.profile=null;state.permissions=[];
   if(!db || !state.user || state.otp)return;
+  const {data:identity,error:identityError}=await db.auth.getUser();
+  if(identityError||!identity?.user){state.user=null;return;}
+  state.user=identity.user;
   // Uma sessão obtida diretamente no Auth não dispensa a verificação no servidor.
   if(state.otpEnabled && !(await result(db.rpc('otp_session_verified')))) {
     await result(db.auth.signOut({scope:'local'}));state.user=null;return;
@@ -63,16 +66,17 @@ export async function upload(file,tab) {
   if(!file?.size) return null;
   if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw new Error('Escolhe uma imagem JPG, PNG ou WebP.');
   if(file.size>5*1024*1024)throw new Error('A imagem pode ter no máximo 5 MB.');
-  const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[file.type];
-  const path=`${tab}/${crypto.randomUUID()}.${ext}`;
-  await result(db.storage.from('ushe-media').upload(path,file,{contentType:file.type,upsert:false}));
-  return path;
+  const body=new FormData();body.set('photo',file);
+  const data=await result(db.functions.invoke(`agent-avatar?tab=${encodeURIComponent(tab)}`,{body}));
+  if(!data?.path)throw new Error('O serviço não confirmou o carregamento da fotografia.');
+  return data.path;
 }
 
 // Compatibilidade com projetos em que a migração OTP ainda não foi instalada.
 export async function loadOtpPolicy() {
   const {data,error}=await db.rpc('otp_policy');
-  if(error&&error.code!=='PGRST202')throw error;
-  state.otpEnabled=!error&&data?.enabled===true;
+  if(error)throw error;
+  if(typeof data?.enabled!=='boolean')throw new Error('Não foi possível confirmar a política de autenticação.');
+  state.otpEnabled=data.enabled;
   return state.otpEnabled;
 }

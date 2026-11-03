@@ -15,7 +15,7 @@ test('HMAC associa código à operação/utilizador; payload cifrado e autentica
  assert.deepEqual(await unseal(secret,encrypted,id),{access_token:'private-session'});
  await assert.rejects(unseal(secret,encrypted,'another-id'));
 });
-function fixture({deliveryError=false,authError=false,enabled=true,configured=true,newCode,identityError=false,provider='resend'}={}){
+function fixture({deliveryError=false,authError=false,enabled=true,configured=true,newCode,identityError=false,provider='resend',linkError=false}={}){
  const secret='test-only-secret-with-more-than-32-characters',id='user-1';let row=null,mailCode=null,granted=false;
  const token='header.'+btoa(JSON.stringify({session_id:'session-1'}))+'.signature';
  const session={access_token:token,refresh_token:'refresh-private'};
@@ -31,7 +31,7 @@ function fixture({deliveryError=false,authError=false,enabled=true,configured=tr
   if(action==='cancel'){row.consumed=true;return {data:{ok:true}};}
   if(action==='resend'){row.code_hash=args.code_hash;return {data:{ok:true,...row}};}
   if(action==='verify'){row.attempts++;if(row.code_hash!==args.code_hash)return {data:{ok:false,error:'invalid'}};row.consumed=true;return {data:{ok:true,...row}};}
- },auth:{async getUser(){return identityError?{error:{message:'offline'}}:{data:{user:{id}}};},admin:{async generateLink(){return {data:{user:{id},properties:{hashed_token:'native-hash'}}};}}}};
+ },auth:{async getUser(){return identityError?{error:{message:'offline'}}:{data:{user:{id}}};},admin:{async generateLink(){if(linkError)return {error:{message:'User does not exist'}};return {data:{user:{id},properties:{hashed_token:'native-hash'}}};}}}};
  const auth={auth:{async signInWithPassword(){return authError?{error:{message:'bad'}}:{data:{user:{id},session}};},async verifyOtp(){return {data:{session}};}}};
  const env=key=>({OTP_SECRET:configured?secret:'',OTP_EMAIL_PROVIDER:provider,OTP_GMAIL_USER:'ushe.example.test@gmail.com',OTP_GMAIL_APP_PASSWORD:'a'.repeat(16),RESEND_API_KEY:'mail-key',OTP_FROM_EMAIL:'USHE <auth@example.test>',OTP_ALLOWED_ORIGINS:'https://portal.example.test'}[key]);
  const handler=createOtpHandler({env,admin,auth,...(newCode?{newCode}:{}),sendSmtp:async(_settings,message)=>{if(deliveryError)throw new Error('offline; do not return credentials');mailCode=message.text.match(/é ([0-9]{4})/)[1];return {accepted:message.to.map(item=>item.address)};},fetcher:async(_url,options)=>{if(deliveryError)throw new Error('offline');const body=JSON.parse(options.body);mailCode=body.text.match(/é ([0-9]{4})/)[1];return {ok:true};}});
@@ -83,9 +83,17 @@ test('Gmail: recusa/erro de rede cancela o desafio e não expõe detalhes do tra
 test('status identifica configuração incompleta sem enviar mensagens ou expor segredos',async()=>{
  const incomplete=fixture({configured:false}),response=await incomplete.request({action:'status'});
  assert.equal(response.status,200);assert.equal(response.data.ready,false);
- assert.deepEqual(response.data.configuration,{provider:'resend',missing:['OTP_SECRET']});
+ assert.ok(!response.data.configuration);
  assert.equal(incomplete.code,null);assert.equal(incomplete.granted,false);
  const complete=fixture({provider:'gmail'}),ok=await complete.request({action:'status'});
- assert.equal(ok.data.ready,true);assert.deepEqual(ok.data.configuration,{provider:'gmail',missing:[]});
+ assert.equal(ok.data.ready,true);assert.ok(!ok.data.configuration);
  assert.ok(!JSON.stringify(ok.data).includes('mail-key'));assert.ok(!JSON.stringify(ok.data).includes('secret-with'));
+});
+
+test('audit: unknown recovery/existing signup returns indistinguishable challenge without session or email',async()=>{
+ for(const operation of ['signup','recovery']){
+  const f=fixture({linkError:true});const result=await f.request({action:'start',operation,email:'missing@example.test',password:'long-password-123',full_name:'Name'});
+  assert.equal(result.status,200);assert.equal(result.data.operation,operation);assert.equal(result.data.proof.length,64);
+  assert.equal(f.code,null);assert.equal(f.granted,false);assert.ok(!result.data.session);
+ }
 });

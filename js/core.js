@@ -51,7 +51,10 @@ export function errorMessage(error) {
   if(error?.code === '42501') return 'Sem autorização para esta operação. Atualiza a sessão ou contacta o Comando.';
   const message = error?.message || String(error);
   const translations = {'Invalid login credentials':'Email ou palavra-passe incorretos.','Email not confirmed':'Confirma o teu email antes de entrar.','User already registered':'Já existe uma conta com este email.','New password should be different from the old password.':'Escolhe uma palavra-passe diferente da anterior.','Failed to fetch':'Não foi possível ligar ao serviço. Verifica a ligação à Internet.'};
-  return translations[message] || message;
+  if(translations[message])return translations[message];
+  if(error?.code||error?.status||/^(?:Auth|Postgrest|Storage|Functions)/.test(error?.name||''))return 'Não foi possível concluir a operação. Verifica os dados e as permissões ou tenta mais tarde.';
+  // Local validation messages are authored by this application; remote errors never pass through.
+  return error instanceof Error?message:'Não foi possível concluir a operação. Tenta novamente.';
 }
 export function toast(message,error=false) {document.dispatchEvent(new CustomEvent('ushe:notify',{detail:{message,error}}));}
 export function empty(text='Ainda não existem registos nesta secção.') {return `<div class="empty"><span>◇</span><p>${e(text)}</p></div>`;}

@@ -10,16 +10,19 @@ export function createOtpHandler({env,admin,auth,fetcher=fetch,newCode=generateC
  const hash=(context,value)=>digest(secret,context,value);
  const rate=async(scope,key,max)=>{if(!(await call('limit',{key:await hash(scope,key),max})).ok)throw new Error('rate_limit');};
  return async req=>{
-  const origin=req.headers.get('origin')||'',headers={'Content-Type':'application/json','Cache-Control':'no-store','Vary':'Origin','Access-Control-Allow-Origin':allowed.includes(origin)?origin:allowed[0],'Access-Control-Allow-Headers':'authorization,apikey,x-client-info,content-type','Access-Control-Allow-Methods':'POST,OPTIONS'};
+  const origin=req.headers.get('origin')||'',headers={'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Vary':'Origin','Access-Control-Allow-Origin':allowed.includes(origin)?origin:allowed[0],'Access-Control-Allow-Headers':'authorization,apikey,x-client-info,content-type','Access-Control-Allow-Methods':'POST,OPTIONS'};
   const reply=(body,status=200)=>new Response(JSON.stringify(body),{status,headers});
   if(!allowed.includes(origin))return reply({error:'Origem não autorizada.'},403);
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers});
   if(req.method!=='POST')return reply({error:'Método não permitido.'},405);
   try {
    if(Number(req.headers.get('content-length'))>8192)return reply({error:'Pedido demasiado grande.'},413);
-   const text=await req.text();if(text.length>8192)return reply({error:'Pedido demasiado grande.'},413);
+   const reader=req.body?.getReader();let text='',size=0;const decoder=new TextDecoder();
+   if(reader){try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>8192){await reader.cancel();return reply({error:'Pedido demasiado grande.'},413);}text+=decoder.decode(value,{stream:true});}text+=decoder.decode();}finally{reader.releaseLock();}}
+   if(size>8192)return reply({error:'Pedido demasiado grande.'},413);
    const body=JSON.parse(text);
-   if(body.action==='status')return reply({ready,configuration:{provider:mail.provider,missing:[...(secret.length<32?['OTP_SECRET']:[]),...mail.missing]}});
+   if(!body||typeof body!=='object'||Array.isArray(body)||!['status','start','verify','resend'].includes(body.action))return reply({error:'Pedido inválido.'},400);
+   if(body.action==='status')return reply({ready});
    if(!ready)return reply({error:'O envio de códigos ainda não está configurado. Contacta a administração.'},503);
    const {data:policy,error:policyError}=await admin.rpc('otp_policy');
    if(policyError||!policy?.enabled)return reply({error:'A verificação por código ainda não foi ativada.'},503);
@@ -36,14 +39,14 @@ export function createOtpHandler({env,admin,auth,fetcher=fetch,newCode=generateC
     } else {
      if(operation==='signup'&&(password.length<12||String(body.full_name||'').trim().length<2))return reply({error:'Preenche o nome e uma palavra-passe com pelo menos 12 caracteres.'},400);
      const {data,error}=await admin.auth.admin.generateLink({type:operation,email,...(operation==='signup'?{password,options:{data:{full_name:String(body.full_name).trim().slice(0,100)}}}:{})});
-     if(error||!data?.properties?.hashed_token||!data?.user)return reply({error:'Não foi possível iniciar a verificação. Confirma os dados ou tenta mais tarde.'},400);
-     user=data.user;payload={token_hash:data.properties.hashed_token,type:operation,email};
+     if(error||!data?.properties?.hashed_token||!data?.user){user={id:null};payload={email,decoy:true};}
+     else{user=data.user;payload={token_hash:data.properties.hashed_token,type:operation,email};}
     }
     await call('cleanup',{});
     const id=crypto.randomUUID(),proof=randomProof(),code=newCode();
     const result=await call('issue',{id,user_id:user.id,operation,proof_hash:await hash('proof',proof),code_hash:await hash('code',`${id}:${user.id}:${operation}:${code}`),payload:await seal(secret,payload,id)});
     if(!result.ok)throw new Error(result.error);
-    try{await send(email,code);}catch{await call('cancel',{id,proof_hash:await hash('proof',proof)});throw new Error('delivery');}
+    try{if(!payload.decoy)await send(email,code);}catch{await call('cancel',{id,proof_hash:await hash('proof',proof)});throw new Error('delivery');}
     return reply({id,proof,email:maskEmail(email),operation,retry_after:60,expires_in:300});
    }
    if(!/^[a-f0-9-]{36}$/.test(body.id||'')||!/^[a-f0-9]{64}$/.test(body.proof||''))return reply({error:messages.invalid},400);
@@ -60,13 +63,13 @@ export function createOtpHandler({env,admin,auth,fetcher=fetch,newCode=generateC
     if(code_hash===lookup.code_hash)throw new Error('storage');
     const rotated=await call('resend',{...args,code_hash});
     if(!rotated.ok)throw new Error(rotated.error);
-    try{await send(payload.email,code);}catch{await call('cancel',args);throw new Error('delivery');}
+    try{if(!payload.decoy)await send(payload.email,code);}catch{await call('cancel',args);throw new Error('delivery');}
     return reply({retry_after:60,expires_in:300});
    }
    if(body.action!=='verify'||!validCode(body.code))return reply({error:'Introduz os quatro algarismos do código.'},400);
    const checked=await call('verify',{...args,code_hash:await hash('code',`${body.id}:${lookup.user_id}:${lookup.operation}:${body.code}`)});
    if(!checked.ok)throw new Error(checked.error);
-   const payload=await unseal(secret,checked.payload,body.id);let session=payload.session;
+   const payload=await unseal(secret,checked.payload,body.id);if(payload.decoy)throw new Error('invalid');let session=payload.session;
    if(!session){const {data,error}=await auth.auth.verifyOtp({token_hash:payload.token_hash,type:payload.type});if(error||!data.session)throw new Error('session');session=data.session;}
    // Confirma a sessão real com Auth antes de autorizar o seu session_id na RLS.
    const {data:identity,error:identityError}=await admin.auth.getUser(session.access_token);

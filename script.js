@@ -14,9 +14,10 @@ function route() {
 function navigation() {
   const current=route().name;
   const links=[['','Início'],...TABS.filter(([key])=>hasTab(key)),['contactos','Contactos'],...(isCommand()?[['administracao','Administração']]:[])];
-  document.querySelector('#main-nav').innerHTML=`<div class="nav-inner">${links.map(([key,label])=>`<a href="#/${key}" ${current===key?'aria-current="page"':''}>${e(label)}</a>`).join('')}<a class="mobile-account" href="#/entrar">${state.user?e(state.profile?.full_name || 'A minha conta'):'Entrar'}</a></div>`;
+  document.querySelector('#main-nav').innerHTML=`<div class="nav-inner">${links.map(([key,label])=>`<a href="#/${key}" ${current===key?'aria-current="page"':''}>${e(label)}</a>`).join('')}<a class="mobile-account" href="${state.user?'#/conta':'#/entrar'}">${state.user?e(state.profile?.full_name || 'A minha conta'):'Entrar'}</a></div>`;
   const account=document.querySelector('#header-account');account.textContent=state.user?(state.profile?.full_name || 'A minha conta'):'Entrar';
-  if(current==='entrar')account.setAttribute('aria-current','page');else account.removeAttribute('aria-current');
+  account.setAttribute('href',state.user?'#/conta':'#/entrar');
+  if(current==='entrar'||current==='conta')account.setAttribute('aria-current','page');else account.removeAttribute('aria-current');
   const motto=state.publicInfo?.motto || 'Honra, Disciplina e Excelência';
   document.querySelector('#header-motto').textContent=motto;document.querySelector('#footer-motto').textContent=` · ${motto}`;
   document.querySelector('#footer-discord').href=discordURL(state.publicInfo?.discord_url) || 'https://discord.com';
@@ -28,12 +29,16 @@ async function render({preserveScroll=false,identity=true}={}) {
   try {
     if(identity)await loadIdentity();
     if(seq!==renderSequence)return;
+    const r=route();
+    // A recuperação de palavra-passe tem de continuar acessível com sessão.
+    if(r.name==='entrar'&&state.user&&!state.recovery){location.replace('#/');return;}
+    if(r.name==='conta'&&!state.user){location.replace('#/entrar');return;}
     navigation();
-    const r=route();let page;
+    let page;
     if(r.name==='treinamentos'&&!state.user){location.replace('#/entrar?reason=login');return;}
     if(!r.name)page=await views.home();
     else if(r.name==='contactos')page=await views.contacts();
-    else if(r.name==='entrar')page=views.login(r.params.get('modo'));
+    else if(r.name==='entrar'||r.name==='conta')page=views.login(r.params.get('modo'));
     else if(r.name==='administracao')page=isCommand()?await views.administration(r.params.get('area') || 'users'):views.restricted();
     else if(r.name==='treinamentos')page=hasTab('registos')?await views.training():views.restricted();
     else if(protectedPages[r.name])page=hasTab(r.name)?await protectedPages[r.name]():views.restricted();
@@ -111,7 +116,7 @@ document.addEventListener('submit',async event=>{
       const session=await result(db.auth.getSession());state.user=session.session?.user || null;
       await loadIdentity();
       if(form.dataset.mode==='reset'){form.reset();return;}
-      location.hash='/entrar';await render();
+      location.hash=state.user&&!state.recovery?'/':'/entrar';await render();
     } else {
       if(form.id==='access-form')await submitAccess(form);else await submitContent(form,cache);
       closeEditor(true);state.publicInfo=await views.publicInfo();await render({preserveScroll:true});toast('Alterações guardadas.');

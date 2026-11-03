@@ -15,7 +15,7 @@ test('HMAC associa código à operação/utilizador; payload cifrado e autentica
  assert.deepEqual(await unseal(secret,encrypted,id),{access_token:'private-session'});
  await assert.rejects(unseal(secret,encrypted,'another-id'));
 });
-function fixture({deliveryError=false,authError=false,enabled=true,configured=true,newCode,identityError=false}={}){
+function fixture({deliveryError=false,authError=false,enabled=true,configured=true,newCode,identityError=false,provider='resend'}={}){
  const secret='test-only-secret-with-more-than-32-characters',id='user-1';let row=null,mailCode=null,granted=false;
  const token='header.'+btoa(JSON.stringify({session_id:'session-1'}))+'.signature';
  const session={access_token:token,refresh_token:'refresh-private'};
@@ -33,8 +33,8 @@ function fixture({deliveryError=false,authError=false,enabled=true,configured=tr
   if(action==='verify'){row.attempts++;if(row.code_hash!==args.code_hash)return {data:{ok:false,error:'invalid'}};row.consumed=true;return {data:{ok:true,...row}};}
  },auth:{async getUser(){return identityError?{error:{message:'offline'}}:{data:{user:{id}}};},admin:{async generateLink(){return {data:{user:{id},properties:{hashed_token:'native-hash'}}};}}}};
  const auth={auth:{async signInWithPassword(){return authError?{error:{message:'bad'}}:{data:{user:{id},session}};},async verifyOtp(){return {data:{session}};}}};
- const env=key=>({OTP_SECRET:configured?secret:'',RESEND_API_KEY:'mail-key',OTP_FROM_EMAIL:'USHE <auth@example.test>',OTP_ALLOWED_ORIGINS:'https://portal.example.test'}[key]);
- const handler=createOtpHandler({env,admin,auth,...(newCode?{newCode}:{}),fetcher:async(_url,options)=>{if(deliveryError)throw new Error('offline');const body=JSON.parse(options.body);mailCode=body.text.match(/é ([0-9]{4})/)[1];return {ok:true};}});
+ const env=key=>({OTP_SECRET:configured?secret:'',OTP_EMAIL_PROVIDER:provider,OTP_GMAIL_USER:'ushe.example.test@gmail.com',OTP_GMAIL_APP_PASSWORD:'a'.repeat(16),RESEND_API_KEY:'mail-key',OTP_FROM_EMAIL:'USHE <auth@example.test>',OTP_ALLOWED_ORIGINS:'https://portal.example.test'}[key]);
+ const handler=createOtpHandler({env,admin,auth,...(newCode?{newCode}:{}),sendSmtp:async(_settings,message)=>{if(deliveryError)throw new Error('offline; do not return credentials');mailCode=message.text.match(/é ([0-9]{4})/)[1];return {accepted:message.to.map(item=>item.address)};},fetcher:async(_url,options)=>{if(deliveryError)throw new Error('offline');const body=JSON.parse(options.body);mailCode=body.text.match(/é ([0-9]{4})/)[1];return {ok:true};}});
  const request=async body=>{const response=await handler(new Request('https://edge.example.test',{method:'POST',headers:{origin:'https://portal.example.test'},body:JSON.stringify(body)}));return {status:response.status,data:await response.json()};};
  return {request,get code(){return mailCode;},get row(){return row;},get granted(){return granted;}};
 }
@@ -69,4 +69,14 @@ test('falhas de rede/envio e configuração não simulam sucesso nem expõem có
 test('signup e recuperação usam verificação nativa no servidor após validar os quatro dígitos',async()=>{
  for(const operation of ['signup','recovery']){const f=fixture(),start=await f.request({action:'start',operation,email:'n@example.test',password:'a-long-password',full_name:'Nome'});
  assert.equal(start.status,200);const response=await f.request({action:'verify',id:start.data.id,proof:start.data.proof,code:f.code});assert.equal(response.data.verified,true);assert.equal(response.data.operation,operation);}
+});
+test('Gmail: o transporte preserva o desafio e só autoriza a sessão após código confirmado',async()=>{
+ const f=fixture({provider:'gmail'});const start=await f.request({action:'start',operation:'login',email:'recipient@example.test',password:'pass'});
+ assert.equal(start.status,200);assert.ok(!start.data.session);assert.ok(!start.data.code);assert.equal(f.granted,false);
+ const result=await f.request({action:'verify',id:start.data.id,proof:start.data.proof,code:f.code});assert.equal(result.data.verified,true);assert.equal(f.granted,true);
+});
+test('Gmail: recusa/erro de rede cancela o desafio e não expõe detalhes do transporte',async()=>{
+ const f=fixture({provider:'gmail',deliveryError:true});const response=await f.request({action:'start',operation:'login',email:'recipient@example.test',password:'pass'});
+ assert.equal(response.status,502);assert.equal(f.row.consumed,true);assert.equal(f.granted,false);
+ assert.ok(!JSON.stringify(response.data).includes('credentials'));assert.ok(!response.data.session);assert.ok(!response.data.code);
 });

@@ -1,6 +1,6 @@
 # USHE — Unidade de Segurança e Honras do Estado
 
-**Atualização de 03/11/2026:** efeitos de interface e backend de verificação de quatro dígitos implementados. A ativação dos códigos aguarda o fornecedor de email/segredos; consultar [instalação, estado e testes](ALTERACOES_MOVIMENTO_OTP.md).
+**Atualização de 03/11/2026:** efeitos de interface e backend de verificação de quatro dígitos implementados. A ativação aguarda a configuração de envio; existe agora uma [opção Gmail sem domínio próprio](ATIVAR_OTP_GMAIL.md), além do Resend. Consultar também [instalação, estado e testes](ALTERACOES_MOVIMENTO_OTP.md).
 
 Portal institucional da cidade Diamond em português de Portugal. HTML, CSS e JavaScript sem compilação, com Supabase para autenticação, Postgres e fotografias privadas. O alojamento dos ficheiros é feito no GitHub Pages.
 

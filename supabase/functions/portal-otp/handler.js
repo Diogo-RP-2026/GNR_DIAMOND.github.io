@@ -1,13 +1,12 @@
 import {generateCode,randomProof,digest,seal,unseal,maskEmail,validCode} from './crypto.js';
+import {createEmailSender} from './email.js';
 const messages={invalid:'O código não está correto. Tenta novamente.',used:'Este código já foi utilizado. Inicia uma nova verificação.',expired:'O código expirou. Pede um novo código.',attempts:'Atingiste o limite de tentativas. Inicia novamente mais tarde.',rate_limit:'Aguarda antes de pedir outro código.',session:'A sessão expirou. Inicia sessão novamente.'};
-export function createOtpHandler({env,admin,auth,fetcher=fetch,newCode=generateCode}) {
+export function createOtpHandler({env,admin,auth,fetcher=fetch,newCode=generateCode,sendSmtp}) {
  const secret=env('OTP_SECRET')||'',allowed=(env('OTP_ALLOWED_ORIGINS')||'https://diogo-rp-2026.github.io').split(',').map(s=>s.trim());
- const ready=secret.length>=32&&!!env('RESEND_API_KEY')&&!!env('OTP_FROM_EMAIL');
+ const mail=createEmailSender({env,fetcher,sendSmtp});
+ const ready=secret.length>=32&&mail.ready;
  const call=async(action,args)=>{const {data,error}=await admin.rpc('otp_service',{action,args});if(error)throw new Error('storage');return data;};
- const send=async(email,code)=>{
-  const response=await fetcher('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${env('RESEND_API_KEY')}`,'Content-Type':'application/json'},body:JSON.stringify({from:env('OTP_FROM_EMAIL'),to:[email],subject:'USHE — código de verificação',text:`O teu código de verificação USHE é ${code}. É válido durante 5 minutos e só pode ser utilizado uma vez. Se não fizeste este pedido, ignora esta mensagem.`})});
-  if(!response.ok)throw new Error('delivery');
- };
+ const send=mail.send;
  const hash=(context,value)=>digest(secret,context,value);
  const rate=async(scope,key,max)=>{if(!(await call('limit',{key:await hash(scope,key),max})).ok)throw new Error('rate_limit');};
  return async req=>{

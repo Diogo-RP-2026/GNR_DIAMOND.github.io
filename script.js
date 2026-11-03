@@ -1,3 +1,4 @@
+import {syncNotifications,stopNotifications} from './js/notifications.js';
 import {agentProfile,openPersonalProfile,previewProfilePhoto,submitPersonalProfile} from './js/profile.js';
 import {initMotion,setMenu,syncNavigation,clearNotifications} from './js/motion.js';
 import {initOTP} from './js/otp.js';
@@ -8,7 +9,7 @@ import * as views from './js/views.js';
 import {openEditor,openAccess,closeEditor,isDirty,submitContent,submitAccess,submitAuth,deleteRecord,formError,openOfficialProfile,submitOfficialProfile} from './js/forms.js';
 
 const main=document.querySelector('main'),dialog=document.querySelector('#editor');
-let cache={},renderSequence=0,ready=false,authTimer;
+let cache={},renderSequence=0,ready=false,authTimer,activeFeed=null,approvalTimer=null,approvalBusy=false;
 const protectedPages={'quem-somos':views.about,equipa:views.team,anuncios:views.announcements,eventos:views.events,avisos:views.warnings,fardamento:views.uniforms,equipamento:views.equipment,regulamento:views.regulations,registos:views.logs};
 function route() {
   const raw=location.hash.startsWith('#/')?location.hash.slice(2):'';
@@ -27,11 +28,13 @@ function navigation() {
   document.querySelector('#copyright-year').textContent=new Date().getFullYear();
 }
 async function render({preserveScroll=false,identity=true}={}) {
+  activeFeed?.dispose();activeFeed=null;
   const seq=++renderSequence,scroll=window.scrollY;
   const previousTab=main.querySelector('.admin-tabs a.active')?.getAttribute?.('href');
   releaseImages(main);cache={};main.innerHTML='<div class="container loading" role="status">A carregar…</div>';
   try {
     if(identity)await loadIdentity();
+    syncNotifications();
     if(seq!==renderSequence)return;
     const r=route();
     if(state.otp&&r.name!=='entrar'){location.replace('#/entrar');return;}
@@ -47,12 +50,13 @@ async function render({preserveScroll=false,identity=true}={}) {
     else if(r.name==='perfil')page=await agentProfile(r.params.get('id'));
     else if(r.name==='administracao')page=isCommand()?await views.administration(r.params.get('area') || 'users'):views.restricted();
     else if(r.name==='treinamentos')page=hasTab('registos')?await views.training():views.restricted();
-    else if(protectedPages[r.name])page=hasTab(r.name)?await protectedPages[r.name]():views.restricted();
+    else if(protectedPages[r.name])page=hasTab(r.name)?await protectedPages[r.name](r.params):views.restricted();
     else page={html:`<section class="container page"><h1>Página não encontrada</h1>${empty('Este endereço não corresponde a uma secção do portal.')}<a class="button" href="#/">Voltar ao Início</a></section>`};
     if(seq!==renderSequence)return;
     main.innerHTML=page.html;
     if(previousTab)main.querySelectorAll('.admin-tabs a:not(.active)').forEach(a=>{if(a.getAttribute('href')===previousTab)a.classList.add('ripple-leaving');});
     cache=page.cache || {};
+    activeFeed=page.mount?.(main,cache)||null;
     main.className=r.name?'route-content':'home-content';
     document.title=r.name?`${main.querySelector('h1')?.textContent || 'USHE'} – USHE`:'USHE – Unidade de Segurança e Honras do Estado';
     views.filterPage(main);await hydrateImages(main);
@@ -95,15 +99,17 @@ document.addEventListener('click',async event=>{
     else if(action==='close')closeEditor();
     else if(action==='access')openAccess(id,cache);
     else if(action==='delete') {
-      el.disabled=true;if(await deleteRecord(table,id,cache)){toast('Registo apagado.');await render({preserveScroll:true});}
+      el.disabled=true;activeFeed?.invalidate();if(await deleteRecord(table,id,cache)){toast('Registo apagado.');if(activeFeed)await activeFeed.refresh();else await render({preserveScroll:true});}
     } else if(action==='vote') {
       const voting=el.closest('.responses');
       voting.querySelectorAll('[data-action="vote"]').forEach(button=>button.disabled=true);
       try {
         const isEvent=el.dataset.kind==='event',target=isEvent?'event_responses':'announcement_responses',key=isEvent?'event_id':'announcement_id';
+        activeFeed?.invalidate();
         await result(db.from(target).upsert({[key]:id,user_id:state.user.id,attending:el.dataset.attending==='true',...(!isEvent?{updated_at:new Date().toISOString()}:{})},{onConflict:`${key},user_id`}));
-        const responses=await rpc('response_names',{p_kind:el.dataset.kind,p_id:id});
-        const parent=el.closest('.responses');if(parent?.isConnected)parent.outerHTML=views.responseComponent(el.dataset.kind,id,responses);
+        if(activeFeed){activeFeed.invalidate();await activeFeed.refresh();}
+        else{const responses=await rpc('response_names',{p_kind:el.dataset.kind,p_id:id});
+        const parent=el.closest('.responses');if(parent?.isConnected)parent.outerHTML=views.responseComponent(el.dataset.kind,id,responses);}
         toast('Disponibilidade atualizada.');
       } finally {voting.querySelectorAll('[data-action="vote"]').forEach(button=>button.disabled=false);}
     } else if(action==='copy') {await navigator.clipboard.writeText(el.dataset.value);toast(`Código ${el.dataset.value} copiado.`);}
@@ -133,24 +139,29 @@ document.addEventListener('submit',async event=>{
       else if(form.id==='personal-profile-form')await submitPersonalProfile(form,cache);
       else if(form.id==='official-profile-form')await submitOfficialProfile(form);
       else await submitContent(form,cache);
-      closeEditor(true);state.publicInfo=await views.publicInfo();await render({preserveScroll:true});toast('Alterações guardadas.');
+      closeEditor(true);state.publicInfo=await views.publicInfo();if(activeFeed){activeFeed.invalidate();await activeFeed.refresh();}else await render({preserveScroll:true});syncNotifications();toast('Alterações guardadas.');
     }
   }catch(error){formError(form,error);}finally{form.dataset.saving='false';form.setAttribute('aria-busy','false');if(saving)saving.hidden=true;submit.disabled=false;cancelButtons.forEach(b=>b.disabled=false);}
 });
 window.addEventListener('hashchange',()=>render());
+window.addEventListener('pagehide',()=>{activeFeed?.dispose();stopNotifications();clearTimeout(approvalTimer);approvalTimer=null;});
+window.addEventListener('pageshow',event=>{if(event.persisted){syncNotifications();render({preserveScroll:true});document.dispatchEvent(new CustomEvent('ushe:session-active'));}});
 
 async function init() {
   if(db) {
     db.auth.onAuthStateChange((event,session)=>{
-      if(state.user?.id!==session?.user?.id)clearNotifications();
+      const identityChanged=state.user?.id!==session?.user?.id;
+      if(identityChanged){activeFeed?.dispose();activeFeed=null;stopNotifications();clearNotifications();}
       state.user=session?.user || null;
+      if(session?.user&&ready)setTimeout(()=>document.dispatchEvent(new CustomEvent('ushe:session-active')),0);
       if(event==='PASSWORD_RECOVERY'){state.recovery=true;location.hash='/entrar';}
       if(event==='SIGNED_OUT') {
+        activeFeed?.dispose();activeFeed=null;stopNotifications();clearTimeout(approvalTimer);approvalTimer=null;
         state.otp=null;clearNotifications();
         state.profile=null;state.permissions=[];cache={};++renderSequence;releaseImages(main);main.replaceChildren();closeEditor(true);navigation();
       }
       // O callback de Auth é síncrono: consultas novas decorrem fora do seu bloqueio.
-      if(ready&&event!=='TOKEN_REFRESHED'&&event!=='INITIAL_SESSION') {
+      if(ready&&(identityChanged||['SIGNED_OUT','PASSWORD_RECOVERY'].includes(event))) {
         clearTimeout(authTimer);authTimer=setTimeout(()=>render(),0);
       }
     });
@@ -162,16 +173,20 @@ async function init() {
     catch(error){toast(errorMessage(error),true);}
   }
   state.publicInfo=await views.publicInfo();ready=true;await render();
-  // Revalida aprovações com a página aberta. A RLS valida sempre cada pedido.
-  if(db)setInterval(async()=>{
-    if(document.hidden||!state.user||dialog.open)return;
-    const before=JSON.stringify([state.profile,state.permissions]);
-    try {
-      await loadIdentity();
-      if(before!==JSON.stringify([state.profile,state.permissions])){toast('As tuas permissões foram atualizadas.');await render({identity:false,preserveScroll:true});}
-      else if(route().name==='eventos')await render({identity:false,preserveScroll:true});
-    }catch { /* Uma falha temporária não substitui os dados visíveis; novas operações continuam protegidas. */ }
-  },45000);
+  // This timer checks identity only; event refresh has its own disposable controller.
+  async function checkApproval(){
+    clearTimeout(approvalTimer);
+    if(!state.user)return;
+    if(!document.hidden&&!dialog.open&&!approvalBusy){
+      approvalBusy=true;const before=JSON.stringify([state.profile,state.permissions]);
+      try{await loadIdentity();syncNotifications();if(before!==JSON.stringify([state.profile,state.permissions])){toast('As tuas permissões foram atualizadas.');await render({identity:false,preserveScroll:true});}}
+      catch{}finally{approvalBusy=false;}
+    }
+    if(state.user)approvalTimer=setTimeout(checkApproval,45000);
+  }
+  document.addEventListener('ushe:session-active',()=>{if(!approvalTimer)checkApproval();});
+  if(db)checkApproval();
+
 }
 initMotion();
 initOTP({render,goHome:recovering=>{location.hash=recovering?'/entrar':'/';render();}});

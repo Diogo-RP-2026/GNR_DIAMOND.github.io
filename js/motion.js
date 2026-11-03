@@ -33,7 +33,10 @@ export function initMotion() {
  initInbox();
 }
 const notifications=[];let queue=[],active=null,flying=false,timer,remaining=0,started=0,generation=0;
+let inboxRenderer=null;
+export function setInboxRenderer(renderer){inboxRenderer=renderer;}
 function paintInbox() {
+ if(inboxRenderer){inboxRenderer();return;}
  const list=document.querySelector('#inbox-list'),count=notifications.filter(n=>!n.read).length;list.replaceChildren();
  document.querySelector('#inbox-count').textContent=String(count);document.querySelector('#inbox-count').hidden=!count;
  document.querySelector('#inbox-toggle').setAttribute('aria-label',`Notificações, ${count} por ler`);
@@ -55,7 +58,7 @@ function initInbox(){
  el.addEventListener('pointerenter',pause);el.addEventListener('pointerleave',resume);el.addEventListener('focusin',pause);el.addEventListener('focusout',()=>queueMicrotask(resume));
  document.addEventListener('visibilitychange',()=>document.hidden?pause():resume());
  document.addEventListener('ushe:notify',event=>{
-  const entry={message:String(event.detail.message),error:!!event.detail.error,read:false,time:new Date().toISOString()};notifications.push(entry);queue.push(entry);paintInbox();if(!active&&!flying)showNext();
+  const entry={message:String(event.detail.message),error:!!event.detail.error,read:false,time:new Date().toISOString()};if(!inboxRenderer)notifications.push(entry);queue.push(entry);paintInbox();if(!active&&!flying)showNext();
  });
 }
 function showNext(){

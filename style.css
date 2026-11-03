@@ -490,3 +490,11 @@ dialog::backdrop { background: rgb(0 0 0 / .8); backdrop-filter: blur(3px); }
  .agent-page .panel { padding:20px; }
  .agent-avatar-preview { width:112px; height:112px; }
 }
+
+/* Paginated archives reuse the existing cards, controls and motion. */
+.pagination{display:flex;gap:.8rem;align-items:center;justify-content:center;flex-wrap:wrap;margin:1.5rem 0}
+.feed-status{min-height:1.7rem;margin:.8rem 0;color:var(--muted,#a2a7af);font-size:.9rem}
+.feed[aria-busy="true"]{cursor:progress}.inbox-message h3{font-size:1rem;margin:0 0 .3rem}.inbox-message.read{opacity:.72}
+.inbox-actions{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.8rem}.inbox-pagination{display:flex;align-items:center;justify-content:space-between;gap:.5rem}
+#inbox-list{max-height:60vh;overflow:auto}.inbox-feedback{font-size:.85rem;padding:.6rem 0}
+@media(max-width:600px){.pagination{gap:.5rem}.filter-bar [data-feed-filter]{max-width:100%}}

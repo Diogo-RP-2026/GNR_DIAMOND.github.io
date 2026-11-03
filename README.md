@@ -220,3 +220,9 @@ Consulta `SEGURANCA.md` para instalação, testes e configurações manuais. O r
 `npm ci --ignore-scripts && npm test` executa os testes. `npm run build` gera `dist/` com os ficheiros públicos necessários. Se mudares o endereço Supabase em `config.js`, atualiza também a lista exata de destinos em `connect-src` no `index.html`.
 
 A migração adicional `20261103223933_otp_start_cooldown.sql` aplica um intervalo fixo de 60 segundos por email antes de contactar o Auth, tanto em contas reais como em desafios sintéticos. Aplicar ambas as migrações de auditoria antes de publicar a função OTP atualizada.
+
+## Eventos, arquivos e notificações persistentes
+
+Eventos atualiza a página visível sem reconstruir filtros ou formulários. Anúncios, Registos e o arquivo de Eventos usam pesquisa no servidor e paginação por cursor. Os votos da página são agregados num único pedido. A caixa de notificações usa Supabase/RLS, com leitura persistente por utilizador.
+
+As migrações `20261103231152_archives_events_notifications.sql` e `20261103232800_notification_read_boundary.sql` já foram aplicadas no projeto associado. Não precisam de Realtime, novos segredos ou novas Edge Functions. Consulta [MELHORIAS_ARQUIVO_NOTIFICACOES.md](MELHORIAS_ARQUIVO_NOTIFICACOES.md) para testes, índices, contagem de pedidos e validações manuais pendentes.

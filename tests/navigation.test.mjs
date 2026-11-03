@@ -16,7 +16,7 @@ function setup({hash='#/entrar',signedIn=true,recovery=false,loginError=false,ot
   const context={document,state,location,views,URLSearchParams,console,
     window:{scrollY:0,scrollTo(){},addEventListener(){}},
     db:{auth:{async getSession(){return {data:{session:{user:{id:'user'}}},error:null};}}},
-    initMotion(){},initOTP(){},clearNotifications(){},setMenu(){},syncNavigation(nav,html){nav.innerHTML=html;},
+    initMotion(){},initOTP(){},syncNotifications(){},stopNotifications(){},clearNotifications(){},setMenu(){},syncNavigation(nav,html){nav.innerHTML=html;},
     e:String,TABS:[['eventos','Eventos']],toast(){},errorMessage:String,empty:String,discordURL:()=>'',
     isCommand:()=>false,hasTab:()=>true,loadIdentity:async()=>{},hydrateImages:async()=>{},releaseImages(){},
     result:async q=>{const r=await q;if(r.error)throw r.error;return r.data;},

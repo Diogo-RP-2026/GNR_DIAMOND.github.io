@@ -1,12 +1,12 @@
 # USHE — Unidade de Segurança e Honras do Estado
 
-**Atualização de 03/11/2026:** efeitos de interface e backend de verificação de quatro dígitos implementados. A configuração Gmail é reconhecida e a política OTP está ativa. O teste real confirmou receção do email, validação do código pelo backend e login concluído no Início, com o menu ativo. Ver a [configuração Gmail sem domínio próprio](ATIVAR_OTP_GMAIL.md), além da alternativa Resend. Consultar também [instalação, estado e testes](ALTERACOES_MOVIMENTO_OTP.md), incluindo os cenários ainda não repetidos com emails reais.
+O portal inclui efeitos de interface e verificação por código de quatro dígitos, validado no backend. As instruções para configurar o envio estão no [guia de email](ATIVAR_OTP_GMAIL.md) e na [documentação técnica](ALTERACOES_MOVIMENTO_OTP.md).
 
 Portal institucional da cidade Diamond em português de Portugal. HTML, CSS e JavaScript sem compilação, com Supabase para autenticação, Postgres e fotografias privadas. O alojamento dos ficheiros é feito no GitHub Pages.
 
-**Estado da instalação:** o esquema, os conteúdos iniciais, as políticas RLS e o bucket privado foram instalados no projeto Supabase `GNR_DIAMOND.github.io`; já existem contas e Comando configurado. A URL e a chave pública estão em `config.js`. O endereço GitHub Pages e os redirecionamentos de produção estão guardados em Authentication → URL Configuration. O envio anterior usa o serviço padrão do Supabase; o novo envio de códigos precisa da configuração descrita no relatório acima. Os passos abaixo também permitem reinstalar o portal num projeto novo.
+**Configuração:** `config.js` contém apenas a URL e a chave pública do projeto Supabase. Credenciais administrativas e segredos de envio são configurados exclusivamente no backend. Os passos abaixo descrevem a instalação num projeto novo; não reapliques o esquema inicial nem os dados de exemplo a uma instalação existente.
 
-As funções privilegiadas ficam no esquema `private`; a API pública usa funções `SECURITY INVOKER` que chamam apenas as operações explicitamente autorizadas. As verificações reais da API confirmaram que visitantes leem estatísticas e contactos, mas não os membros, perfis ou corpos dos anúncios.
+As funções privilegiadas ficam no esquema `private`; a API pública usa funções `SECURITY INVOKER` que chamam apenas as operações explicitamente autorizadas. As políticas RLS controlam o acesso aos dados protegidos.
 
 ## 1. Estrutura dos ficheiros
 
@@ -20,6 +20,8 @@ js/
   core.js                        Datas, pesquisa, apresentação e segurança de texto
   views.js                       Todas as páginas e cartões reutilizáveis
   forms.js                       Formulários de edição e administração
+  motion.js                      Efeitos e caixa de notificações
+  otp.js                         Interface de verificação por código
 images/
   ushe-brasao.png                 Brasão da referência
   ushe-hero.jpg                   Fundo fotográfico da referência
@@ -34,6 +36,9 @@ supabase/
   02_seed.sql                    Conteúdo inicial editável
   03_primeiro_comando.sql         Promoção da primeira conta de Comando
   04_estatisticas_publicas.sql    Atualização para instalações já existentes
+  05_eventos_contas.sql           Proteções adicionais de contas e eventos
+  migrations/                    Migrações posteriores
+  functions/portal-otp/           Backend da verificação por código
 tests/
   core.test.mjs                  Datas, pesquisa e tratamento de texto
   rls.test.mjs                   Políticas e transações em PostgreSQL/PGlite
@@ -80,9 +85,9 @@ Alternativa no VS Code: abre a pasta e usa a extensão Live Server. O Node.js e 
 6. Em **Storage**, confirma o bucket privado `ushe-media`, criado pelo SQL. Aceita JPG, PNG e WebP, até 5 MB por ficheiro. Não o tornes público.
 7. Em **Authentication → Providers / Sign In**, ativa email/palavra-passe e a confirmação de email. Para utilização regular, configura o envio de emails em Authentication/SMTP; os envios do serviço de demonstração podem ter restrições. Ajusta os limites de email e proteção contra abuso às necessidades do servidor.
 8. Em **Authentication → URL Configuration**, define:
-   - Site URL: `https://diogo-rp-2026.github.io/GNR_DIAMOND.github.io/`.
-   - Redirect URLs de produção: `https://diogo-rp-2026.github.io/GNR_DIAMOND.github.io/` e `https://diogo-rp-2026.github.io/GNR_DIAMOND.github.io/#/entrar`. Usa endereços exatos, sem wildcards.
-   - Para testar localmente, adiciona também `http://localhost:8000/` e `http://localhost:8000/#/entrar`. Estes endereços de desenvolvimento não foram adicionados ao projeto de produção. Se usares outro porto no Live Server, autoriza os endereços correspondentes.
+   - Site URL: o endereço público do teu portal, por exemplo `https://UTILIZADOR.github.io/REPOSITORIO/`.
+   - Redirect URLs de produção: o mesmo endereço e a variante terminada em `#/entrar`. Usa endereços exatos, sem wildcards, substituindo os exemplos pelos valores da tua instalação.
+   - Para testar localmente, autoriza `http://localhost:8000/` e `http://localhost:8000/#/entrar` no ambiente de desenvolvimento. Se usares outro porto no Live Server, autoriza os endereços correspondentes.
    - Os links de confirmação/recuperação usam esse endereço com `#/entrar`. O fragmento identifica a página do portal; não precisa de regras de reencaminhamento no servidor.
 9. Abre o diálogo **Connect**, ou **Settings → API Keys**, e copia a URL do projeto e a **publishable key** (`sb_publishable_...`). Uma `anon` key legada também é aceite.
 10. Edita `config.js`:
@@ -90,7 +95,7 @@ Alternativa no VS Code: abre a pasta e usa a extensão Live Server. O Node.js e 
 ```javascript
 window.USHE_CONFIG = Object.freeze({
   supabaseUrl: 'https://O-TEU-PROJETO.supabase.co',
-  supabasePublishableKey: 'sb_publishable_A-TUA-CHAVE-PUBLICA',
+  supabasePublishableKey: 'CHAVE_PUBLICA_DO_PROJETO',
 });
 ```
 
@@ -141,11 +146,11 @@ O Comando gere acesso e cargos das contas existentes; a eliminação definitiva 
 
 ## 6. Publicar/atualizar no GitHub Pages
 
-1. Coloca os ficheiros e pastas na raiz do repositório **Diogo-RP-2026/GNR_DIAMOND.github.io**. O `index.html` fica diretamente na raiz, sem uma pasta adicional.
+1. Coloca os ficheiros e pastas na raiz do repositório escolhido. O `index.html` fica diretamente na raiz, sem uma pasta adicional.
 2. Se estiveres a usar a versão antiga, lê `MIGRACAO.md`. O antigo `conteudo.js` deixa de ser usado.
 3. No GitHub abre **Settings → Pages → Build and deployment**.
 4. Escolhe **Deploy from a branch → main → /(root) → Save**.
-5. Aguarda a publicação automática e abre o endereço indicado no GitHub. O endereço de projeto segue a forma `https://diogo-rp-2026.github.io/GNR_DIAMOND.github.io/`.
+5. Aguarda a publicação automática e abre o endereço indicado no GitHub Pages. Para um site de projeto, o formato habitual é `https://UTILIZADOR.github.io/REPOSITORIO/`.
 6. Ativa **Enforce HTTPS**, quando disponível nas definições do Pages.
 7. Confirma que o mesmo endereço está autorizado nas Redirect URLs do Supabase.
 
@@ -181,30 +186,14 @@ npm test
 
 Os testes executam as tabelas e políticas num PostgreSQL local em WASM (PGlite), com interfaces `auth`/`storage` simuladas. Não contactam nem alteram o projeto Supabase de produção. Consulta `VALIDACAO.md` para o alcance e limites da verificação.
 
-## 9. Decisões assumidas
+## 9. Interface e navegação
 
-- O pedido atual de HTML/CSS/JS + Supabase e SQL substitui o pedido anterior de funcionamento exclusivamente local e sem SQL.
-- **Quem Somos é uma aba reservada**, pois a regra de permissões diz explicitamente que visitantes só veem Início e Contactos.
-- A aprovação e o acesso a Eventos permitem criar eventos e responder, independentemente da patente. A criação de registos exige a autorização adicional individual.
-- Uniform-02 é Diogo Oconner; João Barbosa está em Primeiro Oficial, conforme a equipa indicada. Não inventámos o nome oculto na captura do comunicado.
-- Os indicativos não visíveis ficam em branco, editáveis pelo Comando.
-- O exemplo Ocean Vibe é de **23/10/2026**, uma sexta-feira. Está no arquivo se já terminou. O fim às 23:00 é exemplificativo e assinalado na descrição.
-- O convite Discord continua editável. Na sua ausência, os botões abrem `https://discord.com`, como na referência; não existe um convite fictício para a cidade Diamond. Fotografias de fardamento continuam disponíveis por upload. O fundo e o brasão do site de referência foram integrados; o brasão anterior também foi conservado.
-- As capturas e o regulamento incompleto são referências; os textos e as regras do pedido atual prevalecem.
-- Não existe migração automática de perfis/votos locais: esses perfis nunca comprovaram a identidade das pessoas.
-
-## Atualização visual a partir da referência
-
-Referência indicada pelo utilizador: https://pixel-perfect-recreation-506.lovable.app/ . A reconstrução usa HTML/CSS/JS próprios; não depende do projeto Lovable nem inclui o seu selo de edição.
-
-- Início: mesma fotografia, brasão, fontes Barlow, título, cores, degradé e cartões de estatísticas.
-- Contactos: cartão central com Abrir Ticket e DM ao Comando.
-- Entrar: formulário central e ligação de criação de conta; mantêm-se os modos de recuperação e as validações existentes.
-- As áreas internas continuam protegidas pelas permissões anteriores e usam o mesmo tema. A referência não permite consultar essas áreas sem uma conta aprovada; não se afirma equivalência com páginas privadas não observadas.
-- O cartão Treinamentos abre `#/treinamentos`. Sem sessão, encaminha para Entrar; com sessão, exige acesso a Registos. Os treinos são registos de tipo iniciado por `Trein` ou do tipo `Formação`/`Formacao`.
-- As estatísticas vêm da função `unit_statistics()`, que divulga apenas contagens. Se já tinhas instalado o SQL anterior, executa **apenas** `supabase/04_estatisticas_publicas.sql`. Em instalações novas, a função já faz parte de `01_schema.sql`.
-- Sem configuração Supabase, a apresentação inicial usa os dados fornecidos: **22 efetivos, 7 cargos e 0 treinamentos**. Quando o Supabase está configurado, os valores vêm da base de dados; uma falha de ligação não é apresentada como uma contagem real.
-- O favicon, a autenticação, os documentos, os votos e as permissões existentes foram preservados. A nova aparência não cria sessões nem atribui novos acessos.
+- O Início apresenta a identidade visual do portal e estatísticas agregadas. Depois do login e da verificação necessária, essa página abre com a opção correspondente ativa no menu.
+- O menu mantém os destinos e permissões existentes, com abertura animada e suporte de teclado.
+- As notificações continuam disponíveis na caixa após a animação; só uma ação explícita as marca como lidas.
+- Os efeitos de botões e separadores respeitam os estados de foco, carregamento e desativação, bem como `prefers-reduced-motion`.
+- As páginas internas exigem uma conta aprovada e as permissões adequadas. Os treinos são apresentados através da navegação existente para registos.
+- As estatísticas de uma instalação configurada vêm da base de dados. Uma falha de ligação não é apresentada como uma contagem real.
 
 ## Referências técnicas
 

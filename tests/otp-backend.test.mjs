@@ -80,3 +80,12 @@ test('Gmail: recusa/erro de rede cancela o desafio e não expõe detalhes do tra
  assert.equal(response.status,502);assert.equal(f.row.consumed,true);assert.equal(f.granted,false);
  assert.ok(!JSON.stringify(response.data).includes('credentials'));assert.ok(!response.data.session);assert.ok(!response.data.code);
 });
+test('status identifica configuração incompleta sem enviar mensagens ou expor segredos',async()=>{
+ const incomplete=fixture({configured:false}),response=await incomplete.request({action:'status'});
+ assert.equal(response.status,200);assert.equal(response.data.ready,false);
+ assert.deepEqual(response.data.configuration,{provider:'resend',missing:['OTP_SECRET']});
+ assert.equal(incomplete.code,null);assert.equal(incomplete.granted,false);
+ const complete=fixture({provider:'gmail'}),ok=await complete.request({action:'status'});
+ assert.equal(ok.data.ready,true);assert.deepEqual(ok.data.configuration,{provider:'gmail',missing:[]});
+ assert.ok(!JSON.stringify(ok.data).includes('mail-key'));assert.ok(!JSON.stringify(ok.data).includes('secret-with'));
+});

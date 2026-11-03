@@ -51,3 +51,10 @@ test('Nodemailer fixado gera a mensagem MIME real sem incluir credenciais',async
  }});
  await sender.send('recipient@example.test','0007');
 });
+test('diagnóstico mostra apenas nomes estáticos e não devolve valores do ambiente',()=>{
+ const invalid=createEmailSender({env:env({...settings,OTP_EMAIL_PROVIDER:'private-value-not-to-expose'})});
+ assert.equal(invalid.provider,'invalid');assert.deepEqual(invalid.missing,['OTP_EMAIL_PROVIDER']);
+ assert.ok(!JSON.stringify(invalid).includes('private-value-not-to-expose'));
+ const gmail=createEmailSender({env:env({OTP_EMAIL_PROVIDER:'gmail'}),sendSmtp:async()=>({accepted:[]})});
+ assert.deepEqual(gmail.missing,['OTP_GMAIL_USER','OTP_GMAIL_APP_PASSWORD']);
+});

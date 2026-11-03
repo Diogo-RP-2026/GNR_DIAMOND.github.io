@@ -2,7 +2,7 @@
 
 Esta opção permite usar uma conta Gmail como remetente, sem comprar domínio nem configurar Resend. O endereço Gmail escolhido aparece como remetente aos membros; pode ser uma conta dedicada à USHE.
 
-**Estado:** transporte Gmail implementado; Edge Function `portal-otp` publicada, versão 3, com arranque/`status` HTTP 200 confirmado. Os 53 testes locais passaram, incluindo fixtures Gmail e geração MIME com a biblioteca real. Ainda é necessário configurar a conta/segredos e confirmar envio/receção reais. O OTP mantém-se desativado até essa configuração estar pronta. Este documento não comprova entrega real de emails.
+**Estado:** transporte Gmail implementado; Edge Function `portal-otp` publicada, versão 6, com arranque/`status` HTTP 200 confirmado. Os 55 testes locais passaram, incluindo fixtures Gmail e geração MIME com a biblioteca real. Ainda é necessário configurar a conta/segredos e confirmar envio/receção reais. O OTP mantém-se desativado até essa configuração estar pronta. Este documento não comprova entrega real de emails.
 
 ## 1. Preparar a conta Google
 
@@ -37,7 +37,7 @@ Cola o resultado apenas no campo do segredo no Supabase. Não substituas um `OTP
 
 ## 3. Confirmar preparação, ativar e testar
 
-O `status` da função `portal-otp` deve responder `{ready: true}` depois dos segredos configurados. Este estado valida apenas o formato/configuração; não autentica a conta no Gmail nem confirma que uma mensagem chegou à caixa.
+O `status` da função `portal-otp` deve responder `ready: true` depois dos segredos configurados. O campo `configuration` apresenta apenas o fornecedor reconhecido (`gmail`, `resend` ou `invalid`) e os nomes de configurações em falta/inválidas, nunca os seus valores. Se indicar `OTP_EMAIL_PROVIDER`, guardar exatamente `gmail` no campo Value do Supabase, sem aspas nem formatação. Este estado valida apenas o formato/configuração; não autentica a conta no Gmail nem confirma que uma mensagem chegou à caixa.
 
 Quando estiver tudo preparado, um administrador ativa no SQL Editor:
 

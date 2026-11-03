@@ -19,7 +19,7 @@ export function createOtpHandler({env,admin,auth,fetcher=fetch,newCode=generateC
    if(Number(req.headers.get('content-length'))>8192)return reply({error:'Pedido demasiado grande.'},413);
    const text=await req.text();if(text.length>8192)return reply({error:'Pedido demasiado grande.'},413);
    const body=JSON.parse(text);
-   if(body.action==='status')return reply({ready});
+   if(body.action==='status')return reply({ready,configuration:{provider:mail.provider,missing:[...(secret.length<32?['OTP_SECRET']:[]),...mail.missing]}});
    if(!ready)return reply({error:'O envio de códigos ainda não está configurado. Contacta a administração.'},503);
    const {data:policy,error:policyError}=await admin.rpc('otp_policy');
    if(policyError||!policy?.enabled)return reply({error:'A verificação por código ainda não foi ativada.'},503);

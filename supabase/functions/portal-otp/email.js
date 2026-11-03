@@ -3,8 +3,16 @@ export function createEmailSender({env,fetcher=fetch,sendSmtp}) {
  const provider=(env('OTP_EMAIL_PROVIDER')||'resend').trim().toLowerCase();
  const gmailUser=(env('OTP_GMAIL_USER')||'').trim().toLowerCase();
  const gmailPassword=(env('OTP_GMAIL_APP_PASSWORD')||'').replace(/\s/g,'');
- const ready=provider==='resend'?!!env('RESEND_API_KEY')&&!!env('OTP_FROM_EMAIL'):
-  provider==='gmail'&&/^[^\s<>@]+@(gmail|googlemail)\.com$/.test(gmailUser)&&gmailPassword.length===16&&typeof sendSmtp==='function';
+ const missing=[];
+ if(provider==='gmail') {
+  if(!/^[^\s<>@]+@(gmail|googlemail)\.com$/.test(gmailUser))missing.push('OTP_GMAIL_USER');
+  if(gmailPassword.length!==16)missing.push('OTP_GMAIL_APP_PASSWORD');
+  if(typeof sendSmtp!=='function')missing.push('SMTP_TRANSPORT');
+ } else if(provider==='resend') {
+  if(!env('RESEND_API_KEY'))missing.push('RESEND_API_KEY');
+  if(!env('OTP_FROM_EMAIL'))missing.push('OTP_FROM_EMAIL');
+ } else missing.push('OTP_EMAIL_PROVIDER');
+ const ready=missing.length===0;
  async function send(email,code) {
   if(!ready)throw new Error('delivery');
   const message={subject:'USHE — código de verificação',text:`O teu código de verificação USHE é ${code}. É válido durante 5 minutos e só pode ser utilizado uma vez. Se não fizeste este pedido, ignora esta mensagem.`};
@@ -21,5 +29,6 @@ export function createEmailSender({env,fetcher=fetch,sendSmtp}) {
   const response=await fetcher('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${env('RESEND_API_KEY')}`,'Content-Type':'application/json'},body:JSON.stringify({...message,from:env('OTP_FROM_EMAIL'),to:[email]})});
   if(!response.ok)throw new Error('delivery');
  }
- return {provider,ready,send};
+ // O diagnóstico expõe só nomes conhecidos, nunca valores recebidos do ambiente.
+ return {provider:['gmail','resend'].includes(provider)?provider:'invalid',ready,missing,send};
 }

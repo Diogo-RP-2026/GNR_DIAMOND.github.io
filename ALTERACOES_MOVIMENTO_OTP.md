@@ -1,6 +1,6 @@
 # Movimento e verificação de quatro dígitos — 03/11/2026
 
-**Atualização de envio:** foi acrescentada a opção Gmail, sem domínio próprio. Ver [configuração Gmail](ATIVAR_OTP_GMAIL.md). As instruções Resend abaixo continuam disponíveis como alternativa; a ativação do OTP continua dependente dos segredos e de entrega real confirmada.
+**Atualização de envio:** a configuração Gmail já é reconhecida e a política OTP foi ativada. A entrega real ainda aguarda teste com uma conta própria; ver [estado atual e configuração Gmail](ATIVAR_OTP_GMAIL.md). Os estados de instalação abaixo registam a entrega inicial, antes desta ativação.
 
 O portal continua em HTML, CSS e JavaScript, com rotas `#/`, ficheiros estáticos no GitHub Pages e autenticação/dados no Supabase. Não foi introduzido React nem compilação para publicar o frontend.
 

@@ -2,7 +2,7 @@
 
 Esta opção permite usar uma conta Gmail como remetente, sem comprar domínio nem configurar Resend. O endereço Gmail escolhido aparece como remetente aos membros; pode ser uma conta dedicada à USHE.
 
-**Estado:** transporte Gmail implementado; Edge Function `portal-otp` publicada, versão 6, com arranque/`status` HTTP 200 confirmado. Os 55 testes locais passaram, incluindo fixtures Gmail e geração MIME com a biblioteca real. Ainda é necessário configurar a conta/segredos e confirmar envio/receção reais. O OTP mantém-se desativado até essa configuração estar pronta. Este documento não comprova entrega real de emails.
+**Estado — 03/11/2026:** a função reconhece a configuração Gmail (`ready: true`, sem campos em falta) e a política OTP está ativa no Supabase. Os 55 testes locais passaram. A entrega real do email e a conclusão do código com uma conta própria ainda precisam de ser confirmadas; a preparação da configuração não comprova essa entrega.
 
 ## 1. Preparar a conta Google
 

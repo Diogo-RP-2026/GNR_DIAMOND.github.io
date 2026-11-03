@@ -33,14 +33,14 @@ test('sessão existente na página de login vai para Início e ativa o menu',asy
 });
 test('login bem-sucedido no controlador encaminha para Início',async()=>{
   const x=setup({signedIn:false}),button={disabled:false},error={hidden:true};
-  const form={id:'auth-form',dataset:{mode:'login'},querySelector:s=>s==='[type="submit"]'?button:error};
+  const form={setAttribute(){},id:'auth-form',dataset:{mode:'login'},querySelector:s=>s==='[type="submit"]'?button:error};
   await x.listeners.submit({target:form,preventDefault(){}});
   assert.equal(x.location.hash,'/');assert.equal(x.getError(),null);assert.equal(button.disabled,false);
   assert.match(x.nodes.get('#main-nav').innerHTML,/<a href="#\/" aria-current="page">Início<\/a>/);
 });
 test('login falhado não redireciona nem simula sucesso',async()=>{
   const x=setup({signedIn:false,loginError:true}),button={disabled:false};
-  await x.listeners.submit({target:{id:'auth-form',dataset:{mode:'login'},querySelector:()=>button},preventDefault(){}});
+  await x.listeners.submit({target:{setAttribute(){},id:'auth-form',dataset:{mode:'login'},querySelector:()=>button},preventDefault(){}});
   assert.equal(x.location.hash,'#/entrar');assert.match(x.getError().message,/Credenciais inválidas/);
 });
 test('ligação direta a Eventos com sessão mantém a rota',async()=>{

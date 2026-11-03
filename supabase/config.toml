@@ -2,3 +2,6 @@
 # Registo e recuperação começam antes de existir um JWT de utilizador.
 [functions.portal-otp]
 verify_jwt = false
+
+[functions.agent-avatar]
+verify_jwt = true

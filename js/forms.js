@@ -4,6 +4,8 @@ import {e,RANKS,PIECES,TABS,lisbonInput,lisbonISO,dateRange,discordURL,errorMess
 import {db,state,loadOtpPolicy,isCommand,canManageEvent,canLog,hasTab,result,rpc,save,upload,releaseImages} from './api.js';
 
 const fields={
+  agent_qualifications:[['kind','Tipo','select',true,['formacao','especializacao']],['name','Nome','text',true],['completed_on','Data de conclusão','date',true],['issuer','Entidade ou instrutor responsável','text']],
+  agent_distinctions:[['name','Nome','text',true],['description','Descrição','textarea'],['awarded_on','Data de atribuição','date',true],['symbol','Símbolo / insígnia (texto ou emoji)','text']],
   members:[['uniform_number','Número de uniforme','number',true],['name','Nome','text',true],['callsign','Indicativo','text'],['rank','Patente','select',true,RANKS],['active','Elemento no ativo','checkbox']],
   announcements:[['title','Título','text',true],['kind','Tipo','select',true,['Evento','Reunião','Comunicado Oficial']],['body','Texto do anúncio','textarea',true],['author_name','Autor e patente','text',true],['created_at','Data e hora de publicação','datetime-local',true],['published','Publicado (o título aparece no Início)','checkbox'],['allow_responses','Permitir respostas de disponibilidade','checkbox']],
   events:[['title','Título','text',true],['description','Descrição','textarea'],['starts_at','Data e hora de início','datetime-local',true],['ends_at','Data e hora de fim','datetime-local',true],['location','Local','text',true]],
@@ -15,7 +17,7 @@ const fields={
   contact_info:[['hero_title','Título no Início','text',true],['hero_intro','Apresentação no Início','textarea',true],['recruitment','Texto de recrutamento','textarea',true],['contact_text','Texto de contactos','textarea',true],['discord_url','Convite Discord (opcional)','url'],['motto','Lema','text',true]],
   institutional_content:[['title','Título','text',true],['body','Apresentação institucional','textarea',true],['mission','Missão','textarea',true],['values_text','Valores (um por linha)','textarea',true]],
 };
-const labels={members:'membro',announcements:'anúncio',events:'evento',warnings:'aviso',uniforms:'categoria de fardamento',equipment:'equipamento',regulations:'artigo',event_logs:'registo',contact_info:'Início e Contactos',institutional_content:'Quem Somos'};
+const labels={agent_qualifications:'formação ou especialização',agent_distinctions:'distinção',members:'membro',announcements:'anúncio',events:'evento',warnings:'aviso',uniforms:'categoria de fardamento',equipment:'equipamento',regulations:'artigo',event_logs:'registo',contact_info:'Início e Contactos',institutional_content:'Quem Somos'};
 const photoTabs={members:'equipa',uniforms:'fardamento',equipment:'equipamento'};
 export function isDirty() {const form=document.querySelector('#editor form');return !!form && form.dataset.dirty==='true';}
 export function closeEditor(force=false) {
@@ -26,24 +28,25 @@ export function closeEditor(force=false) {
 function fieldHTML(spec,row) {
   const [key,label,type,required,options]=spec;let value=row[key] ?? '';
   if(type==='datetime-local')value=value?lisbonInput(value):'';
-  const limits={uniform_number:'min="1" max="999"',article_number:'min="1" max="100000"',sort_order:'min="0" max="100000"',name:'maxlength="150"',title:'maxlength="180"',callsign:'maxlength="30"',location:'maxlength="200"',category:'maxlength="100"',event_type:'maxlength="100"',sanction:'maxlength="180"'};
+  const limits={symbol:'maxlength="30"',issuer:'maxlength="180"',uniform_number:'min="1" max="999"',article_number:'min="1" max="100000"',sort_order:'min="0" max="100000"',name:'maxlength="150"',title:'maxlength="180"',callsign:'maxlength="30"',location:'maxlength="200"',category:'maxlength="100"',event_type:'maxlength="100"',sanction:'maxlength="180"'};
   const attrs=`name="${key}" ${required?'required':''} ${limits[key] || (type==='text'?'maxlength="200"':'')} ${type==='number'?'step="1"':''}`;
   if(type==='checkbox')return `<label class="check-label"><input type="checkbox" name="${key}" ${value?'checked':''}>${e(label)}</label>`;
   if(type==='textarea')return `<label>${e(label)}<textarea ${attrs} rows="${key==='pieces_text'?10:5}" maxlength="12000">${e(value)}</textarea></label>`;
-  if(type==='select')return `<label>${e(label)}<select ${attrs}>${options.map(v=>`<option ${value===v?'selected':''}>${e(v)}</option>`).join('')}</select></label>`;
+  if(type==='select')return `<label>${e(label)}<select ${attrs}>${options.map(v=>`<option value="${e(v)}" ${value===v?'selected':''}>${e(({formacao:'Formação',especializacao:'Especialização'})[v] || v)}</option>`).join('')}</select></label>`;
   return `<label>${e(label)}<input type="${type}" ${attrs} value="${e(value)}"></label>`;
 }
 function defaults(table) {
   const start=lisbonInput(),end=lisbonInput(new Date(Date.now()+3600000).toISOString());
   return {rank:'Operacional',active:true,kind:'Comunicado Oficial',author_name:`${state.profile?.full_name || 'Comando'} · Comando USHE`,created_at:new Date().toISOString(),published:true,allow_responses:false,title:table==='warnings'?'1ª REPREENSÃO ESCRITA':'',sanction:'1º Aviso',signature:'Cumprimentos, Duarte Petinga, Comandante USHE.',issued_on:start.slice(0,10),starts_at:lisbonISO(start),ends_at:lisbonISO(end),sort_order:0,category:'Obrigatório',event_type:location.hash.startsWith('#/treinamentos')?'Treino':'Ativação',notes:table==='uniforms'?'Pode ser completamente modificado':'',pieces_text:PIECES.map(k=>`${k} = `).join('\n')};
 }
-export async function openEditor(table,id,cache) {
+export async function openEditor(table,id,cache,kind) {
   if(!fields[table])throw new Error('Formulário desconhecido.');
   let record=id?(cache[table] || []).find(r=>String(r.id)===String(id)):null;
   if(id&&!record)throw new Error('Registo indisponível. Atualiza a página.');
   const allowed=isCommand() || (table==='events'&&hasTab('eventos')&&(!id||canManageEvent(record))) || (table==='event_logs'&&canLog()&&!id);
   if(!allowed)throw new Error('Sem autorização para editar este conteúdo.');
   const row=record?{...record}:defaults(table);
+  if(table==='agent_qualifications'&&!record)row.kind=kind || 'formacao';
   if(table==='uniforms'&&record)row.pieces_text=Object.entries(row.pieces).map(([k,v])=>`${k} = ${v}`).join('\n');
   let participants='';
   if(['warnings','event_logs'].includes(table)) {
@@ -69,6 +72,7 @@ export async function submitContent(form,cache) {
     data[key]=type==='checkbox'?fd.has(key):type==='number'?Number(fd.get(key)):String(fd.get(key) ?? '').trim();
     if(type==='datetime-local')data[key]=lisbonISO(data[key]);
   }
+  if(['agent_qualifications','agent_distinctions'].includes(table)){if(!cache.agent)throw new Error('Abre primeiro o perfil do agente.');data.member_id=cache.agent.member.id;}
   if(table==='events'||table==='event_logs')Object.assign(data,dateRange(fd.get('starts_at'),fd.get('ends_at')));
   if(table==='contact_info'&&data.discord_url&&!discordURL(data.discord_url))throw new Error('Usa um convite https://discord.gg/... ou https://discord.com/invite/...');
   if(table==='uniforms') {
@@ -135,4 +139,27 @@ export async function submitAuth(form) {
 }
 export function formError(form,error) {
   const el=form.querySelector('.form-error');el.textContent=errorMessage(error);el.hidden=false;el.scrollIntoView({block:'nearest'});
+}
+
+// Associação explícita de conta/agente. Nunca usa email no perfil nem altera o cargo de acesso.
+export async function openOfficialProfile(id,cache) {
+  if(!isCommand())throw new Error('Só o Comando pode gerir dados oficiais.');
+  const m=(cache.members || []).find(v=>v.id===id);
+  if(!m)throw new Error('Agente indisponível. Atualiza a página.');
+  const [accounts,subunits]=await Promise.all([
+    rowsForOfficialAccounts(),
+    result(db.from('member_subunits').select('name').eq('member_id',id).order('name'))
+  ]);
+  document.querySelector('#editor-title').textContent=`Dados oficiais · ${m.name}`;
+  document.querySelector('#editor-body').innerHTML=`<form id="official-profile-form" data-id="${id}"><p class="notice small">Confirma a identidade antes de associar uma conta. Uma troca de conta remove a biografia e fotografia pessoais anteriores. Esta operação não altera os acessos ao portal.</p><label>Conta do agente<select name="user_id"><option value="">Sem conta associada</option>${accounts.map(p=>`<option value="${p.id}" ${p.id===m.user_id?'selected':''}>${e(p.full_name)} · ${e(p.email)}</option>`).join('')}</select></label>${fieldHTML(['rank','Patente','select',true,RANKS],m)}${fieldHTML(['callsign','Indicativo','text'],m)}<label>Número de agente<input name="agent_number" maxlength="30" value="${e(m.agent_number || '')}"></label><label>Data de ingresso<input name="joined_on" type="date" value="${e(m.joined_on || '')}"></label><label>Subunidades (uma por linha, até 20)<textarea name="subunits" rows="4" maxlength="2020">${e(subunits.map(v=>v.name).join('\n'))}</textarea></label><p class="form-error" role="alert" hidden></p><div class="form-actions"><button class="button" type="submit">Guardar dados oficiais</button><button class="button outline" type="button" data-action="close">Cancelar</button></div></form>`;
+  document.querySelector('#editor').showModal();
+}
+async function rowsForOfficialAccounts() {
+  const {allRows}=await import('./api.js');
+  return allRows(db.from('profiles').select('id,full_name,email').order('full_name').order('id'));
+}
+export async function submitOfficialProfile(form) {
+  const fd=new FormData(form),subunits=String(fd.get('subunits')||'').split('\n').map(v=>v.trim()).filter(Boolean);
+  if(subunits.length>20||subunits.some(v=>v.length>100))throw new Error('Usa até 20 subunidades, com 100 caracteres por nome.');
+  await rpc('save_agent_official',{p_member:form.dataset.id,p_data:Object.fromEntries(['rank','callsign','agent_number','joined_on','user_id'].map(k=>[k,String(fd.get(k)||'').trim()])),p_subunits:subunits});
 }

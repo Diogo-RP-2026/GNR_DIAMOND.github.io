@@ -1,10 +1,11 @@
+import {agentProfile,openPersonalProfile,previewProfilePhoto,submitPersonalProfile} from './js/profile.js';
 import {initMotion,setMenu,syncNavigation,clearNotifications} from './js/motion.js';
 import {initOTP} from './js/otp.js';
 // Ponto de entrada: navegação por fragmento (#/), compatível com GitHub Pages.
 import {e,TABS,toast,errorMessage,empty,discordURL} from './js/core.js';
 import {db,state,isCommand,hasTab,loadIdentity,loadOtpPolicy,hydrateImages,releaseImages,result,rpc} from './js/api.js';
 import * as views from './js/views.js';
-import {openEditor,openAccess,closeEditor,isDirty,submitContent,submitAccess,submitAuth,deleteRecord,formError} from './js/forms.js';
+import {openEditor,openAccess,closeEditor,isDirty,submitContent,submitAccess,submitAuth,deleteRecord,formError,openOfficialProfile,submitOfficialProfile} from './js/forms.js';
 
 const main=document.querySelector('main'),dialog=document.querySelector('#editor');
 let cache={},renderSequence=0,ready=false,authTimer;
@@ -15,11 +16,11 @@ function route() {
 }
 function navigation() {
   const current=route().name;
-  const links=[['','Início'],...TABS.filter(([key])=>hasTab(key)),['contactos','Contactos'],...(isCommand()?[['administracao','Administração']]:[])];
+  const links=[['','Início'],...TABS.filter(([key])=>hasTab(key)),['contactos','Contactos'],...(state.user?[['perfil','O meu perfil']]:[]),...(isCommand()?[['administracao','Administração']]:[])];
   syncNavigation(document.querySelector('#main-nav'),`<div class="nav-inner">${links.map(([key,label])=>`<a href="#/${key}" ${current===key?'aria-current="page"':''}>${e(label)}</a>`).join('')}<a class="mobile-account" href="${state.user?'#/conta':'#/entrar'}">${state.user?e(state.profile?.full_name || 'A minha conta'):'Entrar'}</a></div>`);
   const account=document.querySelector('#header-account');account.textContent=state.user?(state.profile?.full_name || 'A minha conta'):'Entrar';
   account.setAttribute('href',state.user?'#/conta':'#/entrar');
-  if(current==='entrar'||current==='conta')account.setAttribute('aria-current','page');else account.removeAttribute('aria-current');
+  if(['entrar','conta','perfil'].includes(current))account.setAttribute('aria-current','page');else account.removeAttribute('aria-current');
   const motto=state.publicInfo?.motto || 'Honra, Disciplina e Excelência';
   document.querySelector('#header-motto').textContent=motto;document.querySelector('#footer-motto').textContent=` · ${motto}`;
   document.querySelector('#footer-discord').href=discordURL(state.publicInfo?.discord_url) || 'https://discord.com';
@@ -36,13 +37,14 @@ async function render({preserveScroll=false,identity=true}={}) {
     if(state.otp&&r.name!=='entrar'){location.replace('#/entrar');return;}
     // A recuperação de palavra-passe tem de continuar acessível com sessão.
     if(r.name==='entrar'&&state.user&&!state.recovery&&!state.otp){location.replace('#/');return;}
-    if(r.name==='conta'&&!state.user){location.replace('#/entrar');return;}
+    if(['conta','perfil'].includes(r.name)&&!state.user){location.replace('#/entrar');return;}
     navigation();
     let page;
     if(r.name==='treinamentos'&&!state.user){location.replace('#/entrar?reason=login');return;}
     if(!r.name)page=await views.home();
     else if(r.name==='contactos')page=await views.contacts();
     else if(r.name==='entrar'||r.name==='conta')page=views.login(r.params.get('modo'));
+    else if(r.name==='perfil')page=await agentProfile(r.params.get('id'));
     else if(r.name==='administracao')page=isCommand()?await views.administration(r.params.get('area') || 'users'):views.restricted();
     else if(r.name==='treinamentos')page=hasTab('registos')?await views.training():views.restricted();
     else if(protectedPages[r.name])page=hasTab(r.name)?await protectedPages[r.name]():views.restricted();
@@ -67,13 +69,14 @@ document.querySelector('#close-editor').addEventListener('click',()=>closeEditor
 dialog.addEventListener('cancel',event=>{event.preventDefault();closeEditor();});
 dialog.addEventListener('input',event=>{if(event.target.closest('form'))event.target.closest('form').dataset.dirty='true';});
 dialog.addEventListener('change',event=>{
+  if(event.target.name==='agent_photo')previewProfilePhoto(event.target).catch(error=>formError(event.target.closest('form'),error));
   if(event.target.name==='photo') {
     const img=document.querySelector('#photo-preview'),file=event.target.files[0];
     if(img.dataset.objectUrl)URL.revokeObjectURL(img.dataset.objectUrl);
     if(file&&['image/jpeg','image/png','image/webp'].includes(file.type)&&file.size<=5242880){img.src=URL.createObjectURL(file);img.dataset.objectUrl=img.src;img.hidden=false;}else img.hidden=true;
   }
 });
-document.addEventListener('input',event=>{if(event.target.matches('[data-filter]'))views.filterPage(main);});
+document.addEventListener('input',event=>{if(event.target.name==='biography'){const count=document.querySelector('#biography-count');if(count)count.textContent=`${[...event.target.value].length}/500 caracteres`;}if(event.target.matches('[data-filter]'))views.filterPage(main);});
 document.addEventListener('change',event=>{if(event.target.matches('[data-filter]'))views.filterPage(main);});
 window.addEventListener('beforeunload',event=>{if(isDirty()){event.preventDefault();event.returnValue='';}});
 document.addEventListener('click',async event=>{
@@ -86,7 +89,9 @@ document.addEventListener('click',async event=>{
   const el=event.target.closest('[data-action]');if(!el || el.disabled)return;
   const {action,table,id}=el.dataset;
   try {
-    if(action==='new'||action==='edit')await openEditor(table,action==='new'?null:id,cache);
+    if(action==='new'||action==='edit')await openEditor(table,action==='new'?null:id,cache,el.dataset.kind);
+    else if(action==='personal-profile')await openPersonalProfile(cache);
+    else if(action==='official-profile')await openOfficialProfile(id,cache);
     else if(action==='close')closeEditor();
     else if(action==='access')openAccess(id,cache);
     else if(action==='delete') {
@@ -108,10 +113,11 @@ document.addEventListener('click',async event=>{
   }catch(error){toast(errorMessage(error),true);}finally{el.disabled=false;}
 });
 document.addEventListener('submit',async event=>{
-  const form=event.target;if(!['auth-form','content-form','access-form'].includes(form.id))return;
+  const form=event.target;if(!['auth-form','content-form','access-form','personal-profile-form','official-profile-form'].includes(form.id))return;
   event.preventDefault();const submit=form.querySelector('[type="submit"]');if(submit.disabled)return;
   submit.disabled=true;form.querySelector('.form-error').hidden=true;
-  form.dataset.saving='true';
+  form.dataset.saving='true';form.setAttribute('aria-busy','true');
+  const saving=form.querySelector('.profile-saving');if(saving)saving.hidden=false;
   // Não permite fechar um formulário enquanto a gravação está em curso.
   const cancelButtons=[...dialog.querySelectorAll('button:not([type="submit"])')];cancelButtons.forEach(b=>b.disabled=true);
   try {
@@ -123,10 +129,13 @@ document.addEventListener('submit',async event=>{
       if(form.dataset.mode==='reset'){form.reset();return;}
       location.hash=state.user&&!state.recovery?'/':'/entrar';await render();
     } else {
-      if(form.id==='access-form')await submitAccess(form);else await submitContent(form,cache);
+      if(form.id==='access-form')await submitAccess(form);
+      else if(form.id==='personal-profile-form')await submitPersonalProfile(form,cache);
+      else if(form.id==='official-profile-form')await submitOfficialProfile(form);
+      else await submitContent(form,cache);
       closeEditor(true);state.publicInfo=await views.publicInfo();await render({preserveScroll:true});toast('Alterações guardadas.');
     }
-  }catch(error){formError(form,error);}finally{form.dataset.saving='false';submit.disabled=false;cancelButtons.forEach(b=>b.disabled=false);}
+  }catch(error){formError(form,error);}finally{form.dataset.saving='false';form.setAttribute('aria-busy','false');if(saving)saving.hidden=true;submit.disabled=false;cancelButtons.forEach(b=>b.disabled=false);}
 });
 window.addEventListener('hashchange',()=>render());
 

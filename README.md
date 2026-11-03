@@ -1,5 +1,7 @@
 # USHE — Unidade de Segurança e Honras do Estado
 
+O portal inclui **Perfil do Agente**, acessível pela conta e pela Equipa, com fotografia circular, biografia, dados oficiais, subunidades, qualificações, distinções e atividade sujeita a permissões. Instalação e regras em [PERFIL_AGENTE.md](PERFIL_AGENTE.md).
+
 O portal inclui efeitos de interface e verificação por código de quatro dígitos, validado no backend. As instruções para configurar o envio estão no [guia de email](ATIVAR_OTP_GMAIL.md) e na [documentação técnica](ALTERACOES_MOVIMENTO_OTP.md).
 
 Portal institucional da cidade Diamond em português de Portugal. HTML, CSS e JavaScript sem compilação, com Supabase para autenticação, Postgres e fotografias privadas. O alojamento dos ficheiros é feito no GitHub Pages.
@@ -22,6 +24,7 @@ js/
   forms.js                       Formulários de edição e administração
   motion.js                      Efeitos e caixa de notificações
   otp.js                         Interface de verificação por código
+  profile.js                     Perfil e edição pessoal do agente
 images/
   ushe-brasao.png                 Brasão da referência
   ushe-hero.jpg                   Fundo fotográfico da referência
@@ -39,6 +42,7 @@ supabase/
   05_eventos_contas.sql           Proteções adicionais de contas e eventos
   migrations/                    Migrações posteriores
   functions/portal-otp/           Backend da verificação por código
+  functions/agent-avatar/         Upload autenticado e validação de fotografias
 tests/
   core.test.mjs                  Datas, pesquisa e tratamento de texto
   rls.test.mjs                   Políticas e transações em PostgreSQL/PGlite

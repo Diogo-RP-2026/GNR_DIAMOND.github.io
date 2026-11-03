@@ -50,7 +50,7 @@ export async function save(table,id,data) {
 // Descarregamento autenticado: as fotografias internas ficam num bucket privado.
 export async function hydrateImages(root=document) {
   await Promise.allSettled([...root.querySelectorAll('img[data-path]')].map(async img=>{
-    const data=await result(db.storage.from('ushe-media').download(img.dataset.path));
+    const data=await result(db.storage.from(img.dataset.bucket || 'ushe-media').download(img.dataset.path));
     if(!img.isConnected)return;
     const url=URL.createObjectURL(data);img.src=url;img.dataset.objectUrl=url;img.hidden=false;
     const fallback=img.parentElement.querySelector('.image-placeholder');if(fallback)fallback.hidden=true;

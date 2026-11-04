@@ -3,8 +3,8 @@ import {e,errorMessage} from './core.js';
 export const validOTP=value=>typeof value==='string'&&/^[0-9]{4}$/.test(value);
 export async function otpRequest(body) {
  const {data,error}=await db.functions.invoke('portal-otp',{body});
- if(error){let detail;try{detail=await error.context?.json();}catch{}const err=new Error(detail?.error||'Não foi possível ligar ao serviço. Verifica a ligação e tenta novamente.');err.reason=detail?.reason;throw err;}
- if(data?.error)throw new Error(data.error);return data;
+ if(error){let detail;try{detail=await error.context?.json();}catch{}const err=new Error(detail?.error||'Não foi possível ligar ao serviço. Verifica a ligação e tenta novamente.');err.reason=detail?.reason;err.retry_after=detail?.retry_after;throw err;}
+ if(data?.error)throw Object.assign(new Error(data.error),{reason:data.reason,retry_after:data.retry_after});return data;
 }
 export async function startOTP(form) {
  const fd=new FormData(form),mode=form.dataset.mode;
@@ -30,7 +30,8 @@ export function initOTP({render,goHome,request=otpRequest,client=db,now=Date.now
   const inputs=digits(),otp=state.otp;if(!inputs.length||!otp)return;
   document.querySelector('.otp-submit').disabled=['verifying','success','locked','expired'].includes(otp.status)||!validOTP(inputs.map(el=>el.value).join(''));
   document.querySelector('#otp-form').setAttribute('aria-busy',String(otp.status==='verifying'));
-  if(['verifying','success','locked'].includes(otp.status)||otp.resending||now()<otp.retryAt)document.querySelector('#otp-resend').disabled=true;
+  const left=Math.max(0,Math.ceil((otp.retryAt-now())/1000)),button=document.querySelector('#otp-resend');
+  button.disabled=left>0||otp.resending||['verifying','success','locked'].includes(otp.status);button.textContent=otp.resending?'A enviar…':left?`Reenviar em ${left}s`:'Reenviar código';
  }
  function fill(input,text){
   if(!state.otp||['verifying','success','locked'].includes(state.otp.status))return;
@@ -83,9 +84,10 @@ export function initOTP({render,goHome,request=otpRequest,client=db,now=Date.now
   const otp=state.otp;if(!otp||['verifying','success','locked'].includes(otp.status)||otp.resending||now()<otp.retryAt)return;
   otp.resending=true;event.target.disabled=true;
   try{const data=await request({action:'resend',id:otp.id,proof:otp.proof});if(state.otp!==otp)return;otp.retryAt=now()+data.retry_after*1000;otp.expiresAt=now()+data.expires_in*1000;otp.status='input';otp.digits=[];digits().forEach(el=>{el.value='';el.disabled=false;});feedback('Enviámos um novo código. O anterior deixou de ser válido.');digits()[0]?.focus();}
-  catch(error){feedback(errorMessage(error),'error');if(error.reason==='rate_limit')otp.retryAt=now()+60000;}
+  catch(error){feedback(errorMessage(error),'error');if(error.reason==='rate_limit')otp.retryAt=now()+(Number(error.retry_after)||120)*1000;}
   finally{otp.resending=false;update();}
  });
+ update();
  const interval=setInterval(()=>{
   const button=document.querySelector('#otp-resend'),otp=state.otp;if(!button||!otp)return;
   const left=Math.max(0,Math.ceil((otp.retryAt-now())/1000));button.disabled=left>0||otp.resending||['verifying','success','locked'].includes(otp.status);button.textContent=otp.resending?'A enviar…':left?`Reenviar em ${left}s`:'Reenviar código';

@@ -15,13 +15,13 @@ test('HMAC associa código à operação/utilizador; payload cifrado e autentica
  assert.deepEqual(await unseal(secret,encrypted,id),{access_token:'private-session'});
  await assert.rejects(unseal(secret,encrypted,'another-id'));
 });
-function fixture({deliveryError=false,authError=false,enabled=true,configured=true,newCode,identityError=false,provider='resend',linkError=false,startAllowed=true}={}){
+function fixture({deliveryError=false,authError=false,enabled=true,configured=true,newCode,identityError=false,provider='resend',linkError=false,requestAllowed=true,requestRetry=0}={}){
  const secret='test-only-secret-with-more-than-32-characters',id='user-1';let row=null,mailCode=null,granted=false;
  const token='header.'+btoa(JSON.stringify({session_id:'session-1'}))+'.signature';
  const session={access_token:token,refresh_token:'refresh-private'};
  const admin={async rpc(name,{action,args}={}){
   if(name==='otp_policy')return {data:{enabled}};
-  if(name==='otp_start_allowed')return {data:startAllowed};
+  if(action==='request_limit')return {data:{ok:requestAllowed,retry_after:requestRetry}};
   if(action==='limit')return {data:{ok:true}};
   if(action==='cleanup')return {data:{ok:true}};
   if(action==='issue'){row={...args,consumed:false,attempts:0};return {data:{ok:true}};}
@@ -109,9 +109,19 @@ test('audit: decoy recovery also supports resend and never grants tokens for a g
  assert.equal(result.data.reason,'invalid');assert.ok(!result.data.session);assert.equal(f.granted,false);
 });
 
-test('audit: per-email start cooldown runs before provider calls for real and decoy accounts',async()=>{
+test('audit: per-email quota runs before provider calls for real and decoy accounts',async()=>{
  for(const operation of ['login','recovery','signup']){
-  const f=fixture({startAllowed:false});const result=await f.request({action:'start',operation,email:'n@example.test',password:'long-password-123',full_name:'Name'});
-  assert.equal(result.status,429);assert.equal(f.row,null);assert.equal(f.code,null);assert.equal(f.granted,false);
+  const f=fixture({requestAllowed:false,requestRetry:87});const result=await f.request({action:'start',operation,email:'n@example.test',password:'long-password-123',full_name:'Name'});
+  assert.equal(result.status,429);assert.equal(result.data.retry_after,87);assert.equal(f.row,null);assert.equal(f.code,null);assert.equal(f.granted,false);
+ }
+});
+
+test('OTP: successful requests allow immediate resend; fifth request exposes two-minute countdown',async()=>{
+ for(const requestRetry of [0,120]){
+  const f=fixture({requestRetry});
+  const start=await f.request({action:'start',operation:'login',email:'n@example.test',password:'pass'});
+  assert.equal(start.status,200);assert.equal(start.data.retry_after,requestRetry);
+  const resend=await f.request({action:'resend',id:start.data.id,proof:start.data.proof});
+  assert.equal(resend.status,200);assert.equal(resend.data.retry_after,requestRetry);
  }
 });

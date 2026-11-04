@@ -90,3 +90,12 @@ test('OTP: expiração e limite de tentativas bloqueiam a submissão; reenvio te
  const locked=await otpFixture(async()=>{const error=new Error('Limite de tentativas');error.reason='attempts';throw error;});
  locked.fill('0042');locked.submit();await flush();assert.equal(locked.state.otp.status,'locked');assert.equal(locked.document.querySelector('.otp-submit').disabled,true);
 });
+
+test('OTP: immediate resend and server remaining cooldown, without extending the block',async()=>{
+ let calls=0;const f=await otpFixture(async()=>{calls++;if(calls===1)return {retry_after:0,expires_in:300};const error=new Error('Aguarda');error.reason='rate_limit';error.retry_after=37;throw error;});
+ f.advance(60000);f.tick();f.document.querySelector('#otp-resend').click();await flush();
+ assert.equal(calls,1);assert.equal(f.document.querySelector('#otp-resend').disabled,false);
+ f.document.querySelector('#otp-resend').click();await flush();
+ assert.equal(f.document.querySelector('#otp-resend').textContent,'Reenviar em 37s');
+ f.advance(37000);f.tick();assert.equal(f.document.querySelector('#otp-resend').disabled,false);
+});

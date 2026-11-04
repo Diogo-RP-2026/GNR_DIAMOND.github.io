@@ -219,7 +219,7 @@ Consulta `SEGURANCA.md` para instalação, testes e configurações manuais. O r
 
 `npm ci --ignore-scripts && npm test` executa os testes. `npm run build` gera `dist/` com os ficheiros públicos necessários. Se mudares o endereço Supabase em `config.js`, atualiza também a lista exata de destinos em `connect-src` no `index.html`.
 
-A migração adicional `20261103223933_otp_start_cooldown.sql` aplica um intervalo fixo de 60 segundos por email antes de contactar o Auth, tanto em contas reais como em desafios sintéticos. Aplicar ambas as migrações de auditoria antes de publicar a função OTP atualizada.
+A migração `20261104020916_otp_five_requests_two_minute_wait.sql` substitui a espera de 60 segundos: pedidos de início e reenvios partilham uma quota de cinco pedidos por email, sem intervalo entre os primeiros cinco. O quinto inicia uma espera de 120 segundos; pedidos recusados não prolongam esse prazo. A função devolve `retry_after` para a contagem da interface, incluindo erros HTTP 429. Aplicar as migrações anteriores e esta migração antes de publicar a função OTP atualizada. Mantêm-se as cinco tentativas de validação por desafio, validade do código de cinco minutos, janela do desafio de 15 minutos e quotas independentes por IP e para uploads. A RPC antiga `otp_start_allowed` fica apenas para compatibilidade histórica e já não é chamada pelo portal.
 
 ## Eventos, arquivos e notificações persistentes
 

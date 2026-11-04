@@ -29,6 +29,7 @@ test('permissões, votos, documentos e fotografias são protegidos por PostgreSQ
   await db.exec(await readFile(new URL('../supabase/migrations/20261103201646_agent_profiles.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('../supabase/migrations/20261103214002_security_audit_hardening.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('../supabase/migrations/20261103223933_otp_start_cooldown.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('../supabase/migrations/20261104020916_otp_five_requests_two_minute_wait.sql',import.meta.url),'utf8'));
   for(const [name,id] of Object.entries(uid))await sql('insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3)',[id,`${name}@example.test`,JSON.stringify({full_name:name,role:'command',approved:true})]);
   for(const id of Object.values(uid))await sql('insert into auth.sessions(id,user_id) values($1,$2)',[sessions[id],id]);
   await sql("update public.profiles set role='command',approved=true where id=$1",[uid.admin]);
@@ -288,7 +289,6 @@ test('permissões, votos, documentos e fotografias são protegidos por PostgreSQ
     await sql('insert into auth.sessions(id,user_id) values($1,$2)',[session,uid.other]);
     const service=async(action,args)=>{await as('service_role');return (await sql('select public.otp_service($1,$2) as data',[action,args])).rows[0].data;};
     const issue=async(operation='login')=>{
-      await as('postgres');await sql("update private.otp_challenges set created_at=now()-interval '2 minutes'");
       const id='30000000-0000-4000-8000-'+String(++number).padStart(12,'0');
       assert.equal((await service('issue',{id,user_id:uid.other,operation,code_hash:'hash-0007',proof_hash:'proof',payload:'encrypted-session'})).ok,true);return {id,proof_hash:'proof'};
     };
@@ -303,21 +303,18 @@ test('permissões, votos, documentos e fotografias são protegidos por PostgreSQ
     assert.equal((await service('verify',{...args,code_hash:'hash-0007'})).error,'attempts');
     args=await issue();await as('postgres');await sql("update private.otp_challenges set expires_at=now()-interval '1 second' where id=$1",[args.id]);
     assert.equal((await service('verify',{...args,code_hash:'hash-0007'})).error,'expired');
-    await as('postgres');await sql("update private.otp_challenges set sent_at=now()-interval '61 seconds' where id=$1",[args.id]);
     assert.equal((await service('resend',{...args,code_hash:'hash-0007'})).error,'collision');
     assert.equal((await service('resend',{...args,code_hash:'hash-new'})).ok,true);
-    assert.equal((await service('resend',{...args,code_hash:'hash-other'})).error,'rate_limit');
+    assert.equal((await service('resend',{...args,code_hash:'hash-other'})).ok,true);
     assert.equal((await service('verify',{...args,code_hash:'hash-0007'})).error,'invalid');
-    assert.equal((await service('verify',{...args,code_hash:'hash-new'})).ok,true);
+    assert.equal((await service('verify',{...args,code_hash:'hash-other'})).ok,true);
     assert.equal((await service('verify',{...args,code_hash:'hash-new'})).error,'used');
     const previous=await issue();await issue();assert.equal((await service('verify',{...previous,code_hash:'hash-0007'})).error,'used');
     args=await issue();
     for(let i=0;i<3;i++) {
-      await as('postgres');await sql("update private.otp_challenges set sent_at=now()-interval '61 seconds' where id=$1",[args.id]);
       assert.equal((await service('resend',{...args,code_hash:'hash-resend-'+i})).ok,true);
     }
-    await as('postgres');await sql("update private.otp_challenges set sent_at=now()-interval '61 seconds' where id=$1",[args.id]);
-    assert.equal((await service('resend',{...args,code_hash:'hash-resend-fourth'})).error,'rate_limit');
+    assert.equal((await service('resend',{...args,code_hash:'hash-resend-fourth'})).ok,true);
     for(let i=0;i<5;i++)assert.equal((await service('limit',{key:'email-limit',max:5})).ok,true);
     assert.equal((await service('limit',{key:'email-limit',max:5})).ok,false);
     await as('postgres');await sql("update private.otp_limits set started_at=now()-interval '16 minutes' where key='email-limit'");
@@ -376,6 +373,18 @@ test('permissões, votos, documentos e fotografias são protegidos por PostgreSQ
     await assert.rejects(sql('select public.otp_start_allowed($1)',['b'.repeat(64)]),/permission denied/);
     await as('service_role');assert.equal((await sql('select public.otp_start_allowed($1) ok',['b'.repeat(64)])).rows[0].ok,true);
     assert.equal((await sql('select public.otp_start_allowed($1) ok',['b'.repeat(64)])).rows[0].ok,false);
+  });
+  await t.test('OTP: five immediate requests, fixed two-minute block, fresh quota and private access',async()=>{
+    const key='c'.repeat(64),args=JSON.stringify({key});
+    const reserve=async()=>{await as('service_role');return (await sql("select public.otp_service('request_limit',$1) data",[args])).rows[0].data;};
+    for(let i=1;i<=5;i++)assert.deepEqual(await reserve(),{ok:true,retry_after:i===5?120:0});
+    const blocked=await reserve();assert.equal(blocked.ok,false);assert.ok(blocked.retry_after>0&&blocked.retry_after<=120);
+    await as('postgres');const before=(await sql('select started_at from private.otp_limits where key=$1',['otp-request-v2:'+key])).rows[0].started_at;
+    assert.equal((await reserve()).ok,false);
+    await as('postgres');assert.deepEqual((await sql('select started_at from private.otp_limits where key=$1',['otp-request-v2:'+key])).rows[0].started_at,before);
+    await sql("update private.otp_limits set started_at=clock_timestamp()-interval '121 seconds' where key=$1",['otp-request-v2:'+key]);
+    assert.deepEqual(await reserve(),{ok:true,retry_after:0});
+    for(const role of ['anon','authenticated']){await as(role);await assert.rejects(sql("select public.otp_service('request_limit',$1)",[args]),/permission denied/);}
   });
   await t.test('audit: infinite dates, oversized content and null access assignments rejected in database',async()=>{
     await as('authenticated',uid.admin);

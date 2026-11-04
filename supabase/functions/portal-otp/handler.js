@@ -8,10 +8,16 @@ export function createOtpHandler({env,admin,auth,fetcher=fetch,newCode=generateC
  const call=async(action,args)=>{const {data,error}=await admin.rpc('otp_service',{action,args});if(error)throw new Error('storage');return data;};
  const send=mail.send;
  const hash=(context,value)=>digest(secret,context,value);
- const rate=async(scope,key,max)=>{if(!(await call('limit',{key:await hash(scope,key),max})).ok)throw new Error('rate_limit');};
+ const limited=seconds=>Object.assign(new Error('rate_limit'),{retry_after:seconds});
+ const rate=async(scope,key,max)=>{if(!(await call('limit',{key:await hash(scope,key),max})).ok)throw limited(900);};
+ const reserveRequest=async email=>{
+  const quota=await call('request_limit',{key:await hash('email',email)});
+  if(!quota.ok)throw limited(quota.retry_after||120);
+  return quota;
+ };
  return async req=>{
   const origin=req.headers.get('origin')||'',headers={'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Vary':'Origin','Access-Control-Allow-Origin':allowed.includes(origin)?origin:allowed[0],'Access-Control-Allow-Headers':'authorization,apikey,x-client-info,content-type','Access-Control-Allow-Methods':'POST,OPTIONS'};
-  const reply=(body,status=200)=>new Response(JSON.stringify(body),{status,headers});
+  const reply=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{...headers,...(status===429?{'Retry-After':String(body.retry_after)}:{})}});
   if(!allowed.includes(origin))return reply({error:'Origem não autorizada.'},403);
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers});
   if(req.method!=='POST')return reply({error:'Método não permitido.'},405);
@@ -30,9 +36,7 @@ export function createOtpHandler({env,admin,auth,fetcher=fetch,newCode=generateC
    if(body.action==='start') {
     const email=String(body.email||'').trim().toLowerCase(),password=String(body.password||''),operation=body.operation;
     if(email.length>254||!/^\S+@\S+\.\S+$/.test(email)||!['login','signup','recovery'].includes(operation)||password.length>128)return reply({error:'Dados de autenticação inválidos.'},400);
-    await rate('email',email,5);
-    const {data:startAllowed,error:startLimitError}=await admin.rpc('otp_start_allowed',{p_key:await hash('email-start',email)});
-    if(startLimitError)throw new Error('storage');if(startAllowed!==true)throw new Error('rate_limit');
+    const quota=await reserveRequest(email);
     let user,payload;
     if(operation==='login') {
      const {data,error}=await auth.auth.signInWithPassword({email,password});
@@ -49,13 +53,13 @@ export function createOtpHandler({env,admin,auth,fetcher=fetch,newCode=generateC
     const result=await call('issue',{id,user_id:user.id,operation,proof_hash:await hash('proof',proof),code_hash:await hash('code',`${id}:${user.id}:${operation}:${code}`),payload:await seal(secret,payload,id)});
     if(!result.ok)throw new Error(result.error);
     try{if(!payload.decoy)await send(email,code);}catch{await call('cancel',{id,proof_hash:await hash('proof',proof)});throw new Error('delivery');}
-    return reply({id,proof,email:maskEmail(email),operation,retry_after:60,expires_in:300});
+    return reply({id,proof,email:maskEmail(email),operation,retry_after:quota.retry_after,expires_in:300});
    }
    if(!/^[a-f0-9-]{36}$/.test(body.id||'')||!/^[a-f0-9]{64}$/.test(body.proof||''))return reply({error:messages.invalid},400);
    const args={id:body.id,proof_hash:await hash('proof',body.proof)};
    const lookup=await call('lookup',args);if(!lookup.ok)throw new Error(lookup.error);
    if(body.action==='resend') {
-    const payload=await unseal(secret,lookup.payload,body.id);await rate('email',payload.email,5);
+    const payload=await unseal(secret,lookup.payload,body.id),quota=await reserveRequest(payload.email);
     // Um reenvio nunca volta a aceitar o número anterior, mesmo se o sorteio colidir.
     let code,code_hash;
     for(let i=0;i<16;i++) {
@@ -66,7 +70,7 @@ export function createOtpHandler({env,admin,auth,fetcher=fetch,newCode=generateC
     const rotated=await call('resend',{...args,code_hash});
     if(!rotated.ok)throw new Error(rotated.error);
     try{if(!payload.decoy)await send(payload.email,code);}catch{await call('cancel',args);throw new Error('delivery');}
-    return reply({retry_after:60,expires_in:300});
+    return reply({retry_after:quota.retry_after,expires_in:300});
    }
    if(body.action!=='verify'||!validCode(body.code))return reply({error:'Introduz os quatro algarismos do código.'},400);
    const checked=await call('verify',{...args,code_hash:await hash('code',`${body.id}:${lookup.user_id}:${lookup.operation}:${body.code}`)});
@@ -81,8 +85,8 @@ export function createOtpHandler({env,admin,auth,fetcher=fetch,newCode=generateC
    return reply({verified:true,operation:checked.operation,session:{access_token:session.access_token,refresh_token:session.refresh_token}});
   } catch(error) {
    // Nunca registar corpos, passwords, códigos, tokens ou respostas do fornecedor.
-   const code=error?.message;
-   return reply({error:messages[code]||(code==='delivery'?'Não foi possível enviar o email. Inicia uma nova verificação.':'Não foi possível concluir o pedido. Verifica a ligação e tenta novamente.'),reason:messages[code]?code:'service'},code==='rate_limit'?429:code==='delivery'?502:400);
+   const code=error?.message,retry_after=Math.max(1,Math.ceil(Number(error?.retry_after)||120));
+   return reply({error:code==='rate_limit'?`Atingiste o limite de pedidos. Tenta novamente dentro de ${retry_after} segundos.`:messages[code]||(code==='delivery'?'Não foi possível enviar o email. Inicia uma nova verificação.':'Não foi possível concluir o pedido. Verifica a ligação e tenta novamente.'),reason:messages[code]?code:'service',...(code==='rate_limit'?{retry_after}:{})},code==='rate_limit'?429:code==='delivery'?502:400);
   }
  };
 }

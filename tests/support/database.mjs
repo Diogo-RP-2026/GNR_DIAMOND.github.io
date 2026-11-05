@@ -10,7 +10,10 @@ export async function database(){
  create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
  create table storage.objects(id uuid default gen_random_uuid(),bucket_id text,name text,owner uuid,owner_id text);alter table storage.objects enable row level security;grant select,insert,update,delete on storage.objects to authenticated;`);
  const base=new URL('../../supabase/',import.meta.url);
- for(const path of ['01_schema.sql','02_seed.sql','04_estatisticas_publicas.sql','05_eventos_contas.sql',...(await readdir(new URL('migrations/',base))).sort().map(p=>'migrations/'+p)])await db.exec(await readFile(new URL(path,base),'utf8'));
+ // PGlite runs the real cleanup SQL but has no background-worker extensions.
+ // The pg_cron installation/schedule is verified against hosted PostgreSQL.
+ const migrations=(await readdir(new URL('migrations/',base))).sort().filter(p=>!p.endsWith('_notifications_read_cron.sql'));
+ for(const path of ['01_schema.sql','02_seed.sql','04_estatisticas_publicas.sql','05_eventos_contas.sql',...migrations.map(p=>'migrations/'+p)])await db.exec(await readFile(new URL(path,base),'utf8'));
  const uid={command:'a1000000-0000-4000-8000-000000000001',a:'a1000000-0000-4000-8000-000000000002',b:'a1000000-0000-4000-8000-000000000003',limited:'a1000000-0000-4000-8000-000000000004'};
  for(const [name,id] of Object.entries(uid)){
   await db.query('insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3)',[id,name+'@example.invalid',{full_name:'Test '+name}]);

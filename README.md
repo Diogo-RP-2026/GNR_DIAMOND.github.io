@@ -225,4 +225,6 @@ A migração `20261104020916_otp_five_requests_two_minute_wait.sql` substitui a 
 
 Eventos atualiza a página visível sem reconstruir filtros ou formulários. Anúncios, Registos e o arquivo de Eventos usam pesquisa no servidor e paginação por cursor. Os votos da página são agregados num único pedido. A caixa de notificações usa Supabase/RLS, com leitura persistente por utilizador.
 
+As notificações permitem **Marcar como lida** e **Marcar todas como lidas**. Uma tarefa no banco limpa apenas as notificações já lidas a cada **10 minutos**, mesmo sem o site aberto. As não lidas e os logs permanecem. As migrações de limpeza e Cron já estão aplicadas no projeto associado. A lista e o contador atualizam-se sem recarregar a página. Configuração e validação em [NOTIFICACOES_LIMPEZA.md](NOTIFICACOES_LIMPEZA.md).
+
 As migrações `20261103231152_archives_events_notifications.sql` e `20261103232800_notification_read_boundary.sql` já foram aplicadas no projeto associado. Não precisam de Realtime, novos segredos ou novas Edge Functions. Consulta [MELHORIAS_ARQUIVO_NOTIFICACOES.md](MELHORIAS_ARQUIVO_NOTIFICACOES.md) para testes, índices, contagem de pedidos e validações manuais pendentes.

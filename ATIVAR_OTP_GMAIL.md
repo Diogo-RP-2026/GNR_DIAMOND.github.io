@@ -2,6 +2,8 @@
 
 Esta opção permite usar uma conta Gmail como remetente, sem comprar domínio nem configurar Resend. O endereço Gmail escolhido aparece como remetente aos membros; pode ser uma conta dedicada à USHE.
 
+**Atualização — 05/11/2026:** o remetente e os segredos existentes são preservados. A verificação inicial e a renovação a cada 30 dias estão descritas em [VERIFICACAO_30_DIAS.md](VERIFICACAO_30_DIAS.md). O envio continua a usar os mesmos quatro dígitos, cinco tentativas e a espera de dois minutos após cinco pedidos. Esta atualização não incluiu um novo teste de entrega real por Gmail.
+
 **Estado — 03/11/2026:** a função reconhece a configuração Gmail (`ready: true`, sem campos em falta) e a política OTP está ativa no Supabase. Os 55 testes locais passaram. Num teste real autorizado com uma conta existente, o Gmail aceitou o envio, o utilizador recebeu e introduziu o código pela janela segura, o backend confirmou a identidade e o botão **Continuar** abriu o **Início**, com essa opção ativa no menu (`aria-current="page"`). Nenhuma conta foi criada nem foram alteradas permissões para realizar o teste.
 
 ## 1. Preparar a conta Google

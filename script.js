@@ -28,6 +28,17 @@ function navigation() {
   document.querySelector('#footer-discord').href=discordURL(state.publicInfo?.discord_url) || 'https://discord.com';
   document.querySelector('#copyright-year').textContent=new Date().getFullYear();
 }
+function verificationGate(){
+  if(!state.verificationRequired)return false;
+  activeFeed?.dispose();activeFeed=null;stopNotifications();navigation();
+  if(dialog.open){
+    const form=dialog.querySelector('form');if(form){
+      formError(form,new Error('É necessário verificar novamente o email antes de guardar. Os campos por guardar foram mantidos.'));
+      form.querySelector('.form-error').insertAdjacentHTML('beforeend',' <button type="button" class="text-button" data-action="verify-email">Verificar email</button>');
+    }
+  }else if(route().name!=='entrar')location.replace('#/entrar');
+  return true;
+}
 async function render({preserveScroll=false,identity=true}={}) {
   activeFeed?.dispose();activeFeed=null;
   const seq=++renderSequence,scroll=window.scrollY;
@@ -39,8 +50,9 @@ async function render({preserveScroll=false,identity=true}={}) {
     if(seq!==renderSequence)return;
     const r=route();
     if(state.otp&&r.name!=='entrar'){location.replace('#/entrar');return;}
+    if(state.verificationRequired&&r.name!=='entrar'){location.replace('#/entrar');return;}
     // A recuperação de palavra-passe tem de continuar acessível com sessão.
-    if(r.name==='entrar'&&state.user&&!state.recovery&&!state.otp){location.replace('#/');return;}
+    if(r.name==='entrar'&&state.user&&!state.recovery&&!state.otp&&!state.verificationRequired){location.replace('#/');return;}
     if(['conta','perfil'].includes(r.name)&&!state.user){location.replace('#/entrar');return;}
     navigation();
     let page;
@@ -70,8 +82,8 @@ async function render({preserveScroll=false,identity=true}={}) {
   }
 }
 document.querySelector('#menu-toggle').addEventListener('click',event=>setMenu(event.currentTarget.getAttribute('aria-expanded')!=='true'));
-document.querySelector('#close-editor').addEventListener('click',()=>closeEditor());
-dialog.addEventListener('cancel',event=>{event.preventDefault();closeEditor();});
+document.querySelector('#close-editor').addEventListener('click',()=>{if(closeEditor())verificationGate();});
+dialog.addEventListener('cancel',event=>{event.preventDefault();if(closeEditor())verificationGate();});
 dialog.addEventListener('input',event=>{if(event.target.closest('form'))event.target.closest('form').dataset.dirty='true';});
 dialog.addEventListener('change',event=>{
   if(event.target.name==='agent_photo')previewProfilePhoto(event.target).catch(error=>formError(event.target.closest('form'),error));
@@ -94,10 +106,12 @@ document.addEventListener('click',async event=>{
   const el=event.target.closest('[data-action]');if(!el || el.disabled)return;
   const {action,table,id}=el.dataset;
   try {
+    if(['new','edit','personal-profile','official-profile','access','delete-account','delete','vote'].includes(action)&&verificationGate())return;
     if(action==='new'||action==='edit')await openEditor(table,action==='new'?null:id,cache,el.dataset.kind);
     else if(action==='personal-profile')await openPersonalProfile(cache);
     else if(action==='official-profile')await openOfficialProfile(id,cache);
-    else if(action==='close')closeEditor();
+    else if(action==='close'){if(closeEditor())verificationGate();}
+    else if(action==='verify-email'){if(dialog.open&&!closeEditor())return;location.hash='/entrar';await render();}
     else if(action==='access')openAccess(id,cache);
     else if(action==='delete-account') {
       const form=el.closest('form');if(form?.dataset.saving==='true')return;
@@ -142,11 +156,12 @@ document.addEventListener('submit',async event=>{
   // Não permite fechar um formulário enquanto a gravação está em curso.
   const cancelButtons=[...dialog.querySelectorAll('button:not([type="submit"])')];cancelButtons.forEach(b=>b.disabled=true);
   try {
+    if(form.id!=='auth-form'&&verificationGate())throw new Error('Verifica novamente o email antes de guardar estas alterações.');
     if(form.id==='auth-form') {
       await submitAuth(form);
       const session=await result(db.auth.getSession());state.user=session.session?.user || null;
       await loadIdentity();
-      if(state.otp){state.user=null;location.hash='/entrar';await render();return;}
+      if(state.otp){if(state.otp.operation!=='renewal')state.user=null;location.hash='/entrar';await render();return;}
       if(form.dataset.mode==='reset'){form.reset();return;}
       location.hash=state.user&&!state.recovery?'/':'/entrar';await render();
     } else {
@@ -172,7 +187,7 @@ async function init() {
       if(event==='PASSWORD_RECOVERY'){state.recovery=true;location.hash='/entrar';}
       if(event==='SIGNED_OUT') {
         activeFeed?.dispose();activeFeed=null;stopNotifications();clearTimeout(approvalTimer);approvalTimer=null;
-        state.otp=null;clearNotifications();
+        state.otp=null;state.verificationRequired=false;state.verification=null;clearNotifications();
         state.profile=null;state.permissions=[];cache={};++renderSequence;releaseImages(main);main.replaceChildren();closeEditor(true);navigation();
       }
       // O callback de Auth é síncrono: consultas novas decorrem fora do seu bloqueio.
@@ -183,7 +198,6 @@ async function init() {
     try {
       await loadOtpPolicy();
       const s=await result(db.auth.getSession());state.user=s.session?.user || null;
-      if(state.user&&state.otpEnabled&&!(await rpc('otp_session_verified'))){await db.auth.signOut({scope:'local'});state.user=null;}
     }
     catch(error){toast(errorMessage(error),true);}
   }
@@ -192,14 +206,16 @@ async function init() {
   async function checkApproval(){
     clearTimeout(approvalTimer);
     if(!state.user)return;
-    if(!document.hidden&&!dialog.open&&!approvalBusy){
-      approvalBusy=true;const before=JSON.stringify([state.profile,state.permissions]);
-      try{await loadIdentity();syncNotifications();if(before!==JSON.stringify([state.profile,state.permissions])){toast('As tuas permissões foram atualizadas.');await render({identity:false,preserveScroll:true});}}
+    if(!document.hidden&&!approvalBusy){
+      approvalBusy=true;const before=JSON.stringify([state.profile,state.permissions,state.verificationRequired]);
+      try{await loadIdentity();syncNotifications();if(verificationGate()){if(!dialog.open)await render({identity:false,preserveScroll:true});}
+        else if(!dialog.open&&before!==JSON.stringify([state.profile,state.permissions,state.verificationRequired])){toast('As tuas permissões foram atualizadas.');await render({identity:false,preserveScroll:true});}}
       catch{}finally{approvalBusy=false;}
     }
     if(state.user)approvalTimer=setTimeout(checkApproval,45000);
   }
   document.addEventListener('ushe:session-active',()=>{if(!approvalTimer)checkApproval();});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkApproval();});
   if(db)checkApproval();
 
 }

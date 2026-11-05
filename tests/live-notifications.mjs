@@ -1,5 +1,6 @@
 // HTTP integration test. Only disposable @example.invalid accounts on stdin.
-// Grant OTP to the printed test session IDs, then send {"continue":true}.
+// Seed private.user_verifications for the printed disposable accounts only,
+// with their actual emails and server time, then send {"continue":true}.
 // Credentials and tokens remain in memory and are never printed or saved.
 import {createClient} from '@supabase/supabase-js';
 import {readFile} from 'node:fs/promises';

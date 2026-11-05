@@ -2,7 +2,7 @@
 
 O portal inclui **Perfil do Agente**, acessível pela conta e pela Equipa, com fotografia circular, biografia, dados oficiais, subunidades, qualificações, distinções e atividade sujeita a permissões. Instalação e regras em [PERFIL_AGENTE.md](PERFIL_AGENTE.md).
 
-O portal inclui efeitos de interface e verificação por código de quatro dígitos, validado no backend. As instruções para configurar o envio estão no [guia de email](ATIVAR_OTP_GMAIL.md) e na [documentação técnica](ALTERACOES_MOVIMENTO_OTP.md).
+O portal inclui efeitos de interface e verificação por código de quatro dígitos, validado no backend. Contas novas verificam o email; depois, cada verificação concluída permite entrar durante 30 dias sem repetir o código. O servidor exige renovação quando o prazo termina, incluindo em sessões abertas. Instalação, migração e testes em [VERIFICACAO_30_DIAS.md](VERIFICACAO_30_DIAS.md). As instruções de envio estão no [guia de email](ATIVAR_OTP_GMAIL.md).
 
 Portal institucional da cidade Diamond em português de Portugal. HTML, CSS e JavaScript sem compilação, com Supabase para autenticação, Postgres e fotografias privadas. O alojamento dos ficheiros é feito no GitHub Pages.
 

@@ -1,7 +1,8 @@
 // Optional HTTP integration test. Supply isolated, administrator-created test
 // accounts on stdin, never production credentials. No email is sent by this test.
-// After the signed_in phase, grant OTP verification to these exact test sessions
-// from an administrative SQL connection, then send {"continue":true} on stdin.
+// After signed_in, seed private.user_verifications only for these disposable
+// accounts from an administrative SQL connection; never alter real accounts.
+// Use their actual emails and server time, then send {"continue":true} on stdin.
 import {createClient} from '@supabase/supabase-js';
 import {Image} from 'imagescript';
 import {readFile} from 'node:fs/promises';

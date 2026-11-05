@@ -1,8 +1,8 @@
 import {PGlite} from '@electric-sql/pglite';
 import {readFile,readdir} from 'node:fs/promises';
-export async function database(){
+export async function database({beforeMigration}={}){
  const db=new PGlite();await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;create schema storage;
- create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb default '{}',banned_until timestamptz,deleted_at timestamptz,is_anonymous boolean default false);
+ create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb default '{}',banned_until timestamptz,deleted_at timestamptz,is_anonymous boolean default false,created_at timestamptz default clock_timestamp());
  create table auth.sessions(id uuid primary key,user_id uuid references auth.users(id) on delete cascade,not_after timestamptz);
  create table auth.refresh_tokens(id bigserial primary key,user_id text,session_id uuid references auth.sessions(id) on delete cascade);
  create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
@@ -13,7 +13,7 @@ export async function database(){
  // PGlite runs the real cleanup SQL but has no background-worker extensions.
  // The pg_cron installation/schedule is verified against hosted PostgreSQL.
  const migrations=(await readdir(new URL('migrations/',base))).sort().filter(p=>!p.endsWith('_notifications_read_cron.sql'));
- for(const path of ['01_schema.sql','02_seed.sql','04_estatisticas_publicas.sql','05_eventos_contas.sql',...migrations.map(p=>'migrations/'+p)])await db.exec(await readFile(new URL(path,base),'utf8'));
+ for(const path of ['01_schema.sql','02_seed.sql','04_estatisticas_publicas.sql','05_eventos_contas.sql',...migrations.map(p=>'migrations/'+p)]){if(beforeMigration)await beforeMigration(path,db);await db.exec(await readFile(new URL(path,base),'utf8'));}
  const uid={command:'a1000000-0000-4000-8000-000000000001',a:'a1000000-0000-4000-8000-000000000002',b:'a1000000-0000-4000-8000-000000000003',limited:'a1000000-0000-4000-8000-000000000004'};
  for(const [name,id] of Object.entries(uid)){
   await db.query('insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3)',[id,name+'@example.invalid',{full_name:'Test '+name}]);

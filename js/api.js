@@ -9,21 +9,25 @@ export const configured = /^https:\/\/[a-z0-9-]+\.supabase\.(co|in)$/.test(confi
 export const db=configured?window.supabase.createClient(config.supabaseUrl,config.supabasePublishableKey,{
   auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true},
 }):null;
-export const state={user:null,profile:null,permissions:[],publicInfo:null,recovery:false,otp:null,otpEnabled:false};
+export const state={user:null,profile:null,permissions:[],publicInfo:null,recovery:false,otp:null,otpEnabled:false,verificationRequired:false,verification:null};
 export const isCommand=()=>state.profile?.approved && state.profile?.role==='command';
 export const hasTab=tab=>!!(state.profile?.approved && (isCommand() || state.permissions.some(p=>p.tab===tab)));
 export const canLog=()=>isCommand() || (hasTab('registos') && state.permissions.some(p=>p.tab==='registos' && p.can_create));
 export async function result(query) {const {data,error}=await query;if(error)throw error;return data;}
 export async function loadIdentity() {
   state.profile=null;state.permissions=[];
-  if(!db || !state.user || state.otp)return;
+  if(!db || !state.user){state.verificationRequired=false;state.verification=null;return;}
+  if(state.otp)return;
   const {data:identity,error:identityError}=await db.auth.getUser();
-  if(identityError||!identity?.user){state.user=null;return;}
+  if(identityError||!identity?.user){state.user=null;state.verificationRequired=false;state.verification=null;return;}
   state.user=identity.user;
-  // Uma sessão obtida diretamente no Auth não dispensa a verificação no servidor.
-  if(state.otpEnabled && !(await result(db.rpc('otp_session_verified')))) {
-    await result(db.auth.signOut({scope:'local'}));state.user=null;return;
-  }
+  // The server decides the 30-day deadline, including when this tab stays open.
+  const verification=await result(db.rpc('verification_status'));
+  if(typeof verification?.authenticated!=='boolean'||typeof verification?.verified!=='boolean')throw new Error('Não foi possível confirmar a verificação da conta.');
+  state.verification=verification;state.verificationRequired=verification.authenticated&&!verification.verified;
+  if(!verification.authenticated){await result(db.auth.signOut({scope:'local'}));state.user=null;state.verificationRequired=false;return;}
+  // Keep the native session for an authenticated renewal; no protected data is loaded.
+  if(state.verificationRequired)return;
   const [profile,permissions]=await Promise.all([
     result(db.from('profiles').select('*').eq('id',state.user.id).maybeSingle()),
     result(db.from('tab_permissions').select('*').eq('user_id',state.user.id)),

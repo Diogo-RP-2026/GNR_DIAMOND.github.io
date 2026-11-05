@@ -4,12 +4,12 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 const source=(await readFile(new URL('../script.js',import.meta.url),'utf8'))
-  .replace(/^import .*;\n/gm,'').replace(/\ninit\(\);\s*$/,'\nglobalThis.testAPI={render,navigation};');
-function setup({hash='#/entrar',signedIn=true,recovery=false,loginError=false,otp=null}={}) {
+  .replace(/^import .*;\n/gm,'').replace(/\ninit\(\);\s*$/,'\nglobalThis.testAPI={render,navigation,verificationGate};');
+function setup({hash='#/entrar',signedIn=true,recovery=false,loginError=false,otp=null,verificationRequired=false}={}) {
   const nodes=new Map(),listeners={};
   const node=()=>({innerHTML:'',className:'',textContent:'',hidden:false,attrs:{},classList:{remove(){},toggle(){}},setAttribute(k,v){this.attrs[k]=v;},removeAttribute(k){delete this.attrs[k];},addEventListener(){},querySelectorAll(){return [];},querySelector(selector){return selector==='h1'?{textContent:'Teste'}:null;},focus(){}});
   const document={querySelector(key){if(!nodes.has(key))nodes.set(key,node());return nodes.get(key);},addEventListener(k,fn){listeners[k]=fn;}};
-  const state={user:signedIn?{id:'user'}:null,profile:{approved:true,role:'member',full_name:'Teste'},permissions:[],publicInfo:null,recovery,otp};
+  const state={user:signedIn?{id:'user'}:null,profile:{approved:true,role:'member',full_name:'Teste'},permissions:[],publicInfo:null,recovery,otp,verificationRequired};
   const location={hash,replacements:[],replace(value){this.hash=value;this.replacements.push(value);}};
   const views=new Proxy({filterPage(){}},{get(target,key){return target[key]||(()=>({html:`<h1>${key}</h1>`}));}});
   let error=null;
@@ -70,4 +70,14 @@ test('verificação pendente impede abrir páginas protegidas e mantém o ecrã 
   await x.render({identity:false});assert.equal(x.location.hash,'#/entrar');
   assert.ok(!x.nodes.get('main').innerHTML.includes('<h1>events</h1>'));
   await x.render({identity:false});assert.equal(x.location.hash,'#/entrar');
+});
+test('an expired native session goes to renewal instead of being redirected to Home',async()=>{
+ const x=setup({hash:'#/eventos',verificationRequired:true});await x.render({identity:false});assert.equal(x.location.hash,'#/entrar');
+ await x.render({identity:false});assert.equal(x.location.hash,'#/entrar');assert.equal(x.nodes.get('main').innerHTML,'<h1>login</h1>');
+});
+test('expiry blocks writes while an open editor and its draft remain intact',()=>{
+ const x=setup({hash:'#/eventos',verificationRequired:true});const main=x.nodes.get('main');main.innerHTML='Página existente';
+ const draft={value:'Texto por guardar'},feedback={insertAdjacentHTML(){}};
+ const form={draft,querySelector:()=>feedback},editor=x.nodes.get('#editor');editor.open=true;editor.querySelector=()=>form;
+ assert.equal(x.verificationGate(),true);assert.equal(form.draft,draft);assert.equal(draft.value,'Texto por guardar');assert.equal(main.innerHTML,'Página existente');assert.equal(x.location.hash,'#/eventos');assert.match(x.getError().message,/mantidos/);
 });

@@ -6,12 +6,19 @@ export async function otpRequest(body) {
  if(error){let detail;try{detail=await error.context?.json();}catch{}const err=new Error(detail?.error||'Não foi possível ligar ao serviço. Verifica a ligação e tenta novamente.');err.reason=detail?.reason;err.retry_after=detail?.retry_after;throw err;}
  if(data?.error)throw Object.assign(new Error(data.error),{reason:data.reason,retry_after:data.retry_after});return data;
 }
-export async function startOTP(form) {
+export async function startOTP(form,{request=otpRequest,client=db,now=Date.now}={}) {
  const fd=new FormData(form),mode=form.dataset.mode;
  if(mode==='signup'&&fd.get('password')!==fd.get('confirmation'))throw new Error('As palavras-passe não coincidem.');
- const data=await otpRequest({action:'start',operation:mode==='signup'?'signup':mode==='reset'?'recovery':'login',email:String(fd.get('email')||'').trim(),password:String(fd.get('password')||''),full_name:String(fd.get('full_name')||'').trim()});
+ const data=await request(mode==='renew'?{action:'renew',verification_version:2}:{action:'start',verification_version:2,operation:mode==='signup'?'signup':mode==='reset'?'recovery':'login',email:String(fd.get('email')||'').trim(),password:String(fd.get('password')||''),full_name:String(fd.get('full_name')||'').trim()});
+ if(data?.verified===true&&(data.skip_verification===true||mode==='renew'&&data.already_verified===true)){
+  if(mode!=='renew'&&(!data.session?.access_token||!data.session?.refresh_token))throw new Error('Não foi possível confirmar a sessão.');
+  state.profile=null;state.permissions=[];
+  const installed=await result(mode==='renew'?client.auth.getSession():client.auth.setSession(data.session));
+  if(!installed?.session||!(await result(client.rpc('otp_session_verified'))))throw new Error('Não foi possível confirmar a verificação da conta.');
+  state.otp=null;state.user=installed.user||installed.session.user;state.verificationRequired=false;state.recovery=false;form.reset();return;
+ }
  if(!data?.id||!data.proof||!data.email)throw new Error('Não foi possível iniciar a verificação. Tenta novamente.');
- state.otp={...data,status:'input',retryAt:Date.now()+data.retry_after*1000,expiresAt:Date.now()+data.expires_in*1000};
+ state.otp={...data,status:'input',retryAt:now()+data.retry_after*1000,expiresAt:now()+data.expires_in*1000};
  state.profile=null;state.permissions=[];form.reset();
 }
 const lock='<svg viewBox="0 0 32 32" aria-hidden="true"><g class="otp-lock-path"><rect x="8" y="14" width="16" height="13" rx="3"/><path d="M11 14V9a5 5 0 0 1 10 0v5M16 19v3"/></g><path class="otp-check-path" d="m8 16 5 5 11-11"/></svg>';
@@ -61,21 +68,21 @@ export function initOTP({render,goHome,request=otpRequest,client=db,now=Date.now
   const submit=document.querySelector('.otp-submit');submit.setAttribute('aria-busy','true');submit.lastElementChild.textContent='A verificar…';
   try{
    const data=await request({action:'verify',id:otp.id,proof:otp.proof,code});
-   if(state.otp!==otp)return;if(data.verified!==true||!data.session?.access_token||!data.session?.refresh_token)throw new Error('Não foi possível confirmar a verificação.');
+   if(state.otp!==otp)return;if(data.verified!==true||(otp.operation!=='renewal'&&(!data.session?.access_token||!data.session?.refresh_token)))throw new Error('Não foi possível confirmar a verificação.');
    otp.status='success';otp.session=data.session;feedback('Identidade confirmada. Podes continuar.','success');
    document.querySelector('.otp-card h1').textContent='Verificação concluída';document.querySelector('.otp-intro').textContent='A tua identidade foi confirmada.';document.querySelector('.otp-submit').hidden=true;document.querySelector('#otp-continue').hidden=false;document.querySelector('#otp-continue').focus();
   }catch(error){if(state.otp===otp){otp.status=['attempts','used'].includes(error.reason)?'locked':error.reason==='expired'?'expired':'error';feedback(errorMessage(error),'error');digits().forEach(el=>el.disabled=false);digits()[0]?.focus();}}
   finally{if(state.otp===otp){submit.removeAttribute('aria-busy');submit.lastElementChild.textContent='Verificar código';update();}}
  });
  document.addEventListener('click',async event=>{
-  if(event.target.closest('[data-otp-cancel]')){if(state.otp?.status==='verifying'||state.otp?.continuing){event.preventDefault();return;}state.otp=null;if(state.user){await client.auth.signOut({scope:'local'});state.user=null;}await render();return;}
+  if(event.target.closest('[data-otp-cancel]')){if(state.otp?.status==='verifying'||state.otp?.continuing){event.preventDefault();return;}const renewal=state.otp?.operation==='renewal';state.otp=null;if(state.user&&!renewal){await client.auth.signOut({scope:'local'});state.user=null;}await render();return;}
   if(event.target.id==='otp-continue'){
-   const otp=state.otp,button=event.target;if(!otp?.session||otp.status!=='success'||otp.continuing)return;otp.continuing=true;button.disabled=true;
+   const otp=state.otp,button=event.target;if(!otp||(otp.operation!=='renewal'&&!otp.session)||otp.status!=='success'||otp.continuing)return;otp.continuing=true;button.disabled=true;
    try{
     state.recovery=otp.operation==='recovery';
-    const data=await result(client.auth.setSession(otp.session));
+    const data=await result(otp.operation==='renewal'?client.auth.getSession():client.auth.setSession(otp.session));
     if(!data.session||!(await result(client.rpc('otp_session_verified'))))throw new Error('Não foi possível confirmar a sessão. Tenta continuar novamente.');
-    state.otp=null;state.user=data.user;await loadIdentity();
+    state.otp=null;state.user=data.user||data.session.user;state.verificationRequired=false;await loadIdentity();
     if(!state.user)throw new Error('A sessão já não é válida. Inicia sessão novamente.');
     goHome(otp.operation==='recovery');
    }catch(error){if(!state.otp)state.otp=otp;feedback(errorMessage(error),'error');button.disabled=false;}finally{otp.continuing=false;}return;

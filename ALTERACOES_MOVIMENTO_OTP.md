@@ -1,5 +1,7 @@
 # Movimento e verificação de quatro dígitos — 03/11/2026
 
+**Regra atual — 05/11/2026:** a verificação passou a valer 30 dias por conta, contados desde a confirmação efetiva do código. O login dentro desse prazo dispensa código e não prolonga a validade; sessões abertas também ficam sujeitas à renovação. A migração, o backend e os testes atuais estão em [VERIFICACAO_30_DIAS.md](VERIFICACAO_30_DIAS.md). Os resultados de instalação e teste de 03/11 abaixo são históricos.
+
 **Atualização de envio e login — 03/11/2026:** configuração Gmail reconhecida, política OTP ativa e teste real concluído com uma conta existente. O email foi recebido, o código introduzido pela janela segura foi confirmado pelo backend e **Continuar** abriu o **Início**, com `aria-current="page"` no menu. Não foram criadas contas nem alteradas permissões. Ver [estado atual e configuração Gmail](ATIVAR_OTP_GMAIL.md). Os estados de instalação inicial abaixo são históricos.
 
 O portal continua em HTML, CSS e JavaScript, com rotas `#/`, ficheiros estáticos no GitHub Pages e autenticação/dados no Supabase. Não foi introduzido React nem compilação para publicar o frontend.
@@ -31,20 +33,20 @@ O OTP nativo de email do Supabase exige 6 a 10 dígitos. Os quatro dígitos usam
 
 Quando ativado:
 
-1. No **login**, o backend valida email/palavra-passe no Auth e conserva a sessão cifrada enquanto o utilizador confirma o código enviado por email.
+1. No **login**, o backend valida email/palavra-passe no Auth e consulta a última verificação. Dentro dos 30 dias devolve a sessão sem pedir código; caso contrário, conserva-a cifrada enquanto o utilizador confirma o código enviado por email. Clientes antigos em cache continuam a receber o fluxo OTP compatível até atualizarem.
 2. No **registo/recuperação**, gera o token nativo com `generateLink`, guarda-o cifrado e envia o código próprio de quatro dígitos. Depois da confirmação, troca o token nativo com `verifyOtp`.
-3. Confirma a identidade com `getUser`, associa a autorização ao `session_id` real e só então devolve os tokens da sessão.
+3. Confirma a identidade com `getUser`, valida a sessão Auth real e só autoriza a conta depois da validação necessária. A renovação numa sessão aberta mantém a mesma sessão.
 4. **Continuar** instala a sessão com `setSession` e confirma a autorização no servidor. Login/registo seguem para **Início**; recuperação segue para definir a palavra-passe e depois para Início.
 5. RLS e RPCs de autorização exigem a sessão verificada quando a política está ativa. Login direto na API Auth, ligações antigas ou JavaScript alterado não autorizam dados internos.
 
-A verificação mantém cargos, aprovações e permissões. Vale durante 24 horas, enquanto existir a sessão em `auth.sessions`. O refresh normal mantém a associação. Sessões anteriores à ativação precisam de novo login e código.
+A verificação mantém cargos, aprovações e permissões. A regra atual usa a data de confirmação guardada no backend e um período fixo de 720 horas. O refresh e um novo login não alteram essa data. A sessão precisa de continuar válida em `auth.sessions`.
 
 Proteções implementadas:
 
 - `crypto.getRandomValues`, amostragem sem viés, exatamente quatro algarismos e zeros iniciais preservados.
 - Validade de cinco minutos, utilização única e cinco tentativas acumuladas por desafio; reenviar não reinicia as tentativas.
-- Reenvio depois de 60 segundos; máximo de três reenvios e 15 minutos de duração total do desafio.
-- Cinco pedidos de início/envio por email em 15 minutos, 40 pedidos por IP em 15 minutos e intervalo de início de 60 segundos por utilizador. Limites por email/utilizador aplicados no servidor, independentemente dos cabeçalhos enviados pelo cliente.
+- Início e reenvio partilham cinco pedidos por email, sem espera entre os primeiros cinco. O quinto inicia uma espera de 120 segundos imposta pelo backend; recusas não prolongam esse prazo. Mantém-se a duração total do desafio de 15 minutos.
+- Mantém-se a quota independente de 40 pedidos por IP em 15 minutos. O limite por email é aplicado no servidor, independentemente dos cabeçalhos enviados pelo cliente.
 - Reenvio troca o hash atomicamente e evita sortear o mesmo número. Bloqueios de linha impedem consumo simultâneo do desafio.
 - Código guardado como HMAC-SHA-256 com segredo, associado a desafio/utilizador/operação; prova aleatória de 256 bits para verificar/reenvio.
 - Tokens/payload cifrados com AES-GCM e associados ao desafio. Nenhum código, palavra-passe ou token em logs da aplicação ou respostas de início/reenvio.

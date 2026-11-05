@@ -1,0 +1,50 @@
+-- Administrative SQL Editor only. Synthetic accounts, claims and hashes.
+-- No email is sent. All changes are rolled back, including the fixtures.
+begin;
+set local lock_timeout='5s';
+do $test$
+declare u uuid=gen_random_uuid(); sid uuid=gen_random_uuid(); m uuid=gen_random_uuid();
+ challenge uuid; proof text='test-proof-hmac'; code_hash text='test-code-hmac'; email text;
+ expiry numeric=extract(epoch from clock_timestamp()+interval '10 minutes'); outcome jsonb; previous_time timestamptz;
+begin
+ email='sql-verification-'||u::text||'@example.invalid';
+ insert into auth.users(id,email,raw_user_meta_data) values(u,email,'{"full_name":"Teste SQL 30 dias","last_verified_at":"2099-01-01"}');
+ update public.profiles set approved=true where id=u;
+ insert into auth.sessions(id,user_id) values(sid,u);
+ insert into public.members(id,user_id,name,rank,uniform_number) values(m,u,'Agente SQL temporário','Operacional',(select n from generate_series(1,999) n where not exists(select 1 from public.members where uniform_number=n) limit 1));
+ perform set_config('request.jwt.claim.sub',u::text,true);
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',u,'session_id',sid,'exp',expiry,'role','authenticated','user_metadata',jsonb_build_object('last_verified_at','2099-01-01'))::text,true);
+ execute 'set local role authenticated';
+ if public.verification_status()->>'reason' is distinct from 'initial' or exists(select 1 from public.members where id=m) then raise exception 'Initial verification bypassed';end if;
+ execute 'reset role';
+ challenge=gen_random_uuid();
+ perform private.otp_service('issue',jsonb_build_object('id',challenge,'user_id',u,'session_id',sid,'jwt_exp',expiry,'operation','login','verification_email',email,'proof_hash',proof,'code_hash',code_hash,'payload','synthetic encrypted payload'));
+ if (private.otp_service('grant',jsonb_build_object('challenge_id',challenge,'user_id',u,'session_id',sid,'jwt_exp',expiry,'proof_hash',proof,'verified_email',email))->>'ok')::boolean then raise exception 'Unverified code granted access';end if;
+ outcome=private.otp_service('verify',jsonb_build_object('id',challenge,'proof_hash',proof,'code_hash',code_hash));
+ if not (outcome->>'ok')::boolean then raise exception 'Test code verification failed';end if;
+ outcome=private.otp_service('grant',jsonb_build_object('challenge_id',challenge,'user_id',u,'session_id',sid,'jwt_exp',expiry,'proof_hash',proof,'verified_email',email));
+ if not (outcome->>'ok')::boolean then raise exception 'Verified code failed to grant';end if;
+ execute 'set local role authenticated';
+ if not public.otp_session_verified() or not exists(select 1 from public.members where id=m) then raise exception 'Verified user cannot access own profile';end if;
+ execute 'reset role';
+ update private.user_verifications set last_verified_at=clock_timestamp()-interval '720 hours' where user_id=u;
+ execute 'set local role authenticated';
+ if public.otp_session_verified() or exists(select 1 from public.members where id=m) then raise exception 'Open JWT bypassed expired verification';end if;
+ if public.verification_status()->>'reason' is distinct from 'expired' then raise exception 'Wrong renewal state';end if;
+ execute 'reset role';
+ challenge=gen_random_uuid();
+ perform private.otp_service('issue',jsonb_build_object('id',challenge,'user_id',u,'session_id',sid,'jwt_exp',expiry,'operation','renewal','verification_email',email,'proof_hash',proof,'code_hash',code_hash,'payload','synthetic encrypted payload'));
+ perform private.otp_service('verify',jsonb_build_object('id',challenge,'proof_hash',proof,'code_hash',code_hash));
+ outcome=private.otp_service('grant',jsonb_build_object('challenge_id',challenge,'user_id',u,'session_id',sid,'jwt_exp',expiry,'proof_hash',proof,'verified_email',email));
+ if not (outcome->>'ok')::boolean then raise exception 'Renewal failed';end if;
+ select last_verified_at into previous_time from private.user_verifications where user_id=u;
+ perform private.otp_service('grant',jsonb_build_object('challenge_id',challenge,'user_id',u,'session_id',sid,'jwt_exp',expiry,'proof_hash',proof,'verified_email',email));
+ if previous_time is distinct from (select last_verified_at from private.user_verifications where user_id=u) then raise exception 'Repeated grant extended the period';end if;
+ execute 'set local role authenticated';
+ outcome=public.verification_status();
+ if not (outcome->>'verified')::boolean or not exists(select 1 from public.members where id=m) then raise exception 'Renewed session blocked';end if;
+ if extract(epoch from ((outcome->>'verification_expires_at')::timestamptz-(outcome->>'last_verified_at')::timestamptz))<>2592000 then raise exception 'Period is not exactly 30 days';end if;
+ execute 'reset role';
+end $test$;
+rollback;
+select 'passed; all synthetic data rolled back' as verification_period_test;

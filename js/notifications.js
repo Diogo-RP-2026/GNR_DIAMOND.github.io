@@ -4,7 +4,7 @@ import {setInboxRenderer} from './motion.js';
 import {requestGate} from './feed.js';
 let controller=null;
 export function syncNotifications(){
- const id=state.user?.id;
+ const id=!state.verificationRequired&&!state.otp?state.user?.id:null;
  if(controller?.user===id)return;
  controller?.dispose();controller=null;
  if(id)controller=startNotifications({user:id});

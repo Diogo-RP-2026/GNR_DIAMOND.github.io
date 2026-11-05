@@ -1,4 +1,5 @@
 import {startOTP} from './otp.js';
+import {accountDeletionControls} from './accounts.js';
 // Formulários reutilizáveis. Os documentos com participantes usam funções SQL atómicas.
 import {e,RANKS,PIECES,TABS,lisbonInput,lisbonISO,dateRange,discordURL,errorMessage,toast,uniform} from './core.js';
 import {db,state,loadOtpPolicy,isCommand,canManageEvent,canLog,hasTab,result,rpc,save,upload,releaseImages} from './api.js';
@@ -51,7 +52,8 @@ export async function openEditor(table,id,cache,kind) {
   let participants='';
   if(['warnings','event_logs'].includes(table)) {
     const members=await rpc('member_options'),selected=(row[table==='warnings'?'warning_members':'event_log_participants']||[]).map(p=>p.member_id);
-    participants=`<fieldset class="participants"><legend>${table==='warnings'?'Operacionais visados':'Participantes'} (obrigatório)</legend><div class="participants-list">${members.map(m=>`<label class="check-label"><input name="participants" type="checkbox" value="${m.id}" ${selected.includes(m.id)?'checked':''}><span>${e(uniform(m.uniform_number))} · ${e(m.name)}<small>${e(m.rank)}</small></span></label>`).join('')}</div>${!members.length?'<p>Adiciona primeiro os membros na Equipa.</p>':''}</fieldset>`;
+    const historical=(row[table==='warnings'?'warning_members':'event_log_participants']||[]).filter(p=>!p.member_id);
+    participants=`${historical.length?`<p class="notice small">Participantes históricos preservados: ${historical.map(p=>e(p.member_snapshot.name)).join(', ')}.</p>`:''}<fieldset class="participants"><legend>${table==='warnings'?'Operacionais visados':'Participantes'} (obrigatório)</legend><div class="participants-list">${members.map(m=>`<label class="check-label"><input name="participants" type="checkbox" value="${m.id}" ${selected.includes(m.id)?'checked':''}><span>${e(uniform(m.uniform_number))} · ${e(m.name)}<small>${e(m.rank)}</small></span></label>`).join('')}</div>${!members.length?'<p>Adiciona primeiro os membros na Equipa.</p>':''}</fieldset>`;
   }
   const photo=photoTabs[table]?`<fieldset><legend>Fotografia</legend>${row.image_path?'<p class="muted small">Já existe uma fotografia guardada.</p><label class="check-label"><input name="remove_photo" type="checkbox">Remover fotografia atual</label>':''}<label>Escolher imagem do computador<input name="photo" type="file" accept="image/png,image/jpeg,image/webp"></label><p class="muted small">JPG, PNG ou WebP · máximo 5 MB.</p><img id="photo-preview" alt="Pré-visualização da nova fotografia" hidden></fieldset>`:'';
   document.querySelector('#editor-title').textContent=`${id?'Editar':'Criar'} ${labels[table]}`;
@@ -61,8 +63,17 @@ export async function openEditor(table,id,cache,kind) {
 export function openAccess(id,cache) {
   if(!isCommand())throw new Error('Apenas o Comando gere acessos.');
   const p=cache.profiles.find(v=>v.id===id),perms=cache.tab_permissions.filter(v=>v.user_id===id);
-  document.querySelector('#editor-title').textContent=`Acessos · ${p.full_name}`;
+  if(!p)throw new Error('Conta indisponível. Atualiza a listagem.');
+  const job=(cache.account_deletions||[]).find(v=>v.target_id===id);
+  document.querySelector('#editor-title').textContent=`Gerir/Editar conta · ${p.full_name}`;
   document.querySelector('#editor-body').innerHTML=`<form id="access-form" data-id="${id}"><p class="muted">${e(p.email)}</p><label>Papel da conta<select name="role"><option value="member" ${p.role==='member'?'selected':''}>Membro</option><option value="command" ${p.role==='command'?'selected':''}>Comando (administração completa)</option></select></label><label class="check-label"><input name="approved" type="checkbox" ${p.approved?'checked':''}>Conta aprovada</label><fieldset><legend>Abas autorizadas</legend><p class="muted small">O Comando tem acesso a todas as abas. Para os membros, seleciona cada acesso individualmente.</p>${TABS.map(([key,label])=>`<label class="check-label"><input type="checkbox" name="tabs" value="${key}" ${perms.some(v=>v.tab===key)?'checked':''}>${e(label)}</label>`).join('')}<label class="check-label sub-permission"><input type="checkbox" name="can_create" ${perms.some(v=>v.tab==='registos'&&v.can_create)?'checked':''}>Permitir criar registos de eventos/hospitalares</label></fieldset><p class="form-error" role="alert" hidden></p><div class="form-actions"><button type="submit" class="button primary">Guardar permissões</button><button type="button" class="button outline" data-action="close">Cancelar</button></div></form>`;
+  const form=document.querySelector('#access-form');
+  if(p.role==='command') {
+    form.querySelector('select[name="role"]').disabled=true;
+    form.insertAdjacentHTML('beforeend','<input type="hidden" name="role" value="command">');
+  }
+  form.insertAdjacentHTML('beforeend',accountDeletionControls(p,job));
+  if(job){form.querySelectorAll('input,select,[type="submit"]').forEach(input=>input.disabled=true);}
   document.querySelector('#editor').showModal();
 }
 export async function submitContent(form,cache) {
@@ -87,7 +98,7 @@ export async function submitContent(form,cache) {
     if(!Object.keys(data.pieces).length)throw new Error('Adiciona pelo menos uma peça.');
   }
   const members=fd.getAll('participants');
-  if(['warnings','event_logs'].includes(table)&&!members.length)throw new Error('Seleciona pelo menos um membro da equipa.');
+  if(['warnings','event_logs'].includes(table)&&!members.length&&!(cache[table]||[]).find(r=>String(r.id)===String(id))?.[table==='warnings'?'warning_members':'event_log_participants']?.some(p=>!p.member_id))throw new Error('Seleciona pelo menos um membro da equipa.');
   let newPath=null;
   const old=(cache[table] || []).find(r=>String(r.id)===String(id));
   try {

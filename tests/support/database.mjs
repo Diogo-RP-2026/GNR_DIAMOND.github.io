@@ -3,11 +3,12 @@ import {readFile,readdir} from 'node:fs/promises';
 export async function database(){
  const db=new PGlite();await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;create schema storage;
  create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb default '{}',banned_until timestamptz,deleted_at timestamptz,is_anonymous boolean default false);
- create table auth.sessions(id uuid primary key,user_id uuid references auth.users(id),not_after timestamptz);
+ create table auth.sessions(id uuid primary key,user_id uuid references auth.users(id) on delete cascade,not_after timestamptz);
+ create table auth.refresh_tokens(id bigserial primary key,user_id text,session_id uuid references auth.sessions(id) on delete cascade);
  create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
  grant usage on schema auth,storage,public to anon,authenticated;grant execute on function auth.uid() to anon,authenticated;
  create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
- create table storage.objects(id uuid default gen_random_uuid(),bucket_id text,name text);alter table storage.objects enable row level security;grant select,insert,update,delete on storage.objects to authenticated;`);
+ create table storage.objects(id uuid default gen_random_uuid(),bucket_id text,name text,owner uuid,owner_id text);alter table storage.objects enable row level security;grant select,insert,update,delete on storage.objects to authenticated;`);
  const base=new URL('../../supabase/',import.meta.url);
  for(const path of ['01_schema.sql','02_seed.sql','04_estatisticas_publicas.sql','05_eventos_contas.sql',...(await readdir(new URL('migrations/',base))).sort().map(p=>'migrations/'+p)])await db.exec(await readFile(new URL(path,base),'utf8'));
  const uid={command:'a1000000-0000-4000-8000-000000000001',a:'a1000000-0000-4000-8000-000000000002',b:'a1000000-0000-4000-8000-000000000003',limited:'a1000000-0000-4000-8000-000000000004'};

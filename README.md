@@ -146,7 +146,7 @@ As permissões ficam na base de dados, não no armazenamento local. Nenhum utili
 
 As datas usam **Europe/Lisbon** em qualquer computador. O fim pode ser no dia seguinte mas tem de ser posterior ao início. Horas inexistentes na mudança para a hora de verão são recusadas; na hora repetida de outono é usada a primeira ocorrência.
 
-O Comando gere acesso e cargos das contas existentes; a eliminação definitiva de contas Auth e os convites administrativos por email são feitos no painel Supabase, sem colocar segredos no browser. O portal não envia mensagens no Discord.
+O Comando gere os acessos e pode apagar contas com o cargo Membro em Administração → Gerir/Editar conta. Contas de Comando não podem ser apagadas nem despromovidas pelo portal. O backend remove a conta Auth, o perfil e as fotografias exclusivas, revoga as sessões e preserva o histórico. Uma falha mantém a operação pendente, com acesso bloqueado e opção de retoma. Instalação e testes em [CONTAS_MEMBROS.md](CONTAS_MEMBROS.md). Os convites administrativos por email continuam no painel Supabase; o portal não envia mensagens no Discord.
 
 ## 6. Publicar/atualizar no GitHub Pages
 

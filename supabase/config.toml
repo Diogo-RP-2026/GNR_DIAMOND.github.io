@@ -5,3 +5,8 @@ verify_jwt = false
 
 [functions.agent-avatar]
 verify_jwt = true
+
+# Auth.getUser and database liveness/role checks validate bearer tokens.
+# Supports the project's current asymmetric signing keys.
+[functions.account-admin]
+verify_jwt = false

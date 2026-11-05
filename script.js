@@ -1,3 +1,4 @@
+import {removeMemberAccount} from './js/accounts.js';
 import {syncNotifications,stopNotifications} from './js/notifications.js';
 import {agentProfile,openPersonalProfile,previewProfilePhoto,submitPersonalProfile} from './js/profile.js';
 import {initMotion,setMenu,syncNavigation,clearNotifications} from './js/motion.js';
@@ -98,6 +99,20 @@ document.addEventListener('click',async event=>{
     else if(action==='official-profile')await openOfficialProfile(id,cache);
     else if(action==='close')closeEditor();
     else if(action==='access')openAccess(id,cache);
+    else if(action==='delete-account') {
+      const form=el.closest('form');if(form?.dataset.saving==='true')return;
+      const controls=[...dialog.querySelectorAll('button')].map(button=>({button,disabled:button.disabled}));
+      form.dataset.saving='true';form.setAttribute('aria-busy','true');controls.forEach(({button})=>button.disabled=true);
+      try {
+        const profile=cache.profiles?.find(p=>p.id===id),agent=cache.account_agents?.find(m=>m.user_id===id);
+        if(await removeMemberAccount(profile,agent?.name)){
+          closeEditor(true);await render({preserveScroll:true});toast('Conta, perfil e fotografias removidos. O histórico foi preservado.');
+        }
+      }catch(error){
+        closeEditor(true);await render({preserveScroll:true});
+        if(cache.profiles?.some(p=>p.id===id)){openAccess(id,cache);formError(document.querySelector('#access-form'),error);}else toast(errorMessage(error),true);
+      }finally{form.dataset.saving='false';form.setAttribute('aria-busy','false');controls.forEach(({button,disabled})=>button.disabled=disabled);}
+    }
     else if(action==='delete') {
       el.disabled=true;activeFeed?.invalidate();if(await deleteRecord(table,id,cache)){toast('Registo apagado.');if(activeFeed)await activeFeed.refresh();else await render({preserveScroll:true});}
     } else if(action==='vote') {

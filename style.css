@@ -498,3 +498,9 @@ dialog::backdrop { background: rgb(0 0 0 / .8); backdrop-filter: blur(3px); }
 .inbox-actions{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.8rem}.inbox-pagination{display:flex;align-items:center;justify-content:space-between;gap:.5rem}
 #inbox-list{max-height:60vh;overflow:auto}.inbox-feedback{font-size:.85rem;padding:.6rem 0}
 @media(max-width:600px){.pagination{gap:.5rem}.filter-bar [data-feed-filter]{max-width:100%}}
+
+/* Account deletion uses the existing dialog/button design. */
+.account-danger-zone{margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--border,#344039)}
+.account-danger-zone h3{margin:0 0 .5rem}
+.account-danger-zone .danger{margin-top:.75rem;color:#ffb3ae;border-color:#ae453f}
+.account-danger-zone .notice{margin-top:1rem}

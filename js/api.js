@@ -28,6 +28,7 @@ export async function loadIdentity() {
     result(db.from('profiles').select('*').eq('id',state.user.id).maybeSingle()),
     result(db.from('tab_permissions').select('*').eq('user_id',state.user.id)),
   ]);
+  if(!profile){state.user=null;await result(db.auth.signOut({scope:'local'}));return;}
   state.profile=profile;state.permissions=permissions;
 }
 // A API limita o tamanho de cada resposta. A paginação evita truncar votos/nomes aos 1000 registos.
@@ -53,7 +54,9 @@ export async function save(table,id,data) {
 // Descarregamento autenticado: as fotografias internas ficam num bucket privado.
 export async function hydrateImages(root=document) {
   await Promise.allSettled([...root.querySelectorAll('img[data-path]')].map(async img=>{
-    const data=await result(db.storage.from(img.dataset.bucket || 'ushe-media').download(img.dataset.path));
+    // Fetch the origin with current authorization instead of reusing an edge
+    // response that may precede account deletion or a permission change.
+    const data=await result(db.storage.from(img.dataset.bucket || 'ushe-media').download(img.dataset.path,{cacheNonce:crypto.randomUUID()},{cache:'no-store'}));
     if(!img.isConnected)return;
     const url=URL.createObjectURL(data);img.src=url;img.dataset.objectUrl=url;img.hidden=false;
     const fallback=img.parentElement.querySelector('.image-placeholder');if(fallback)fallback.hidden=true;

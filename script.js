@@ -165,11 +165,12 @@ document.addEventListener('submit',async event=>{
       if(form.dataset.mode==='reset'){form.reset();return;}
       location.hash=state.user&&!state.recovery?'/':'/entrar';await render();
     } else {
+      let savedMessage;
       if(form.id==='access-form')await submitAccess(form);
       else if(form.id==='personal-profile-form')await submitPersonalProfile(form,cache);
       else if(form.id==='official-profile-form')await submitOfficialProfile(form);
-      else await submitContent(form,cache);
-      closeEditor(true);state.publicInfo=await views.publicInfo();if(activeFeed){activeFeed.invalidate();await activeFeed.refresh();}else await render({preserveScroll:true});syncNotifications();toast('Alterações guardadas.');
+      else savedMessage=await submitContent(form,cache);
+      closeEditor(true);state.publicInfo=await views.publicInfo();if(activeFeed){activeFeed.invalidate();await activeFeed.refresh();}else await render({preserveScroll:true});syncNotifications();toast(savedMessage||'Alterações guardadas.');
     }
   }catch(error){formError(form,error);}finally{form.dataset.saving='false';form.setAttribute('aria-busy','false');if(saving)saving.hidden=true;submit.disabled=false;cancelButtons.forEach(b=>b.disabled=false);}
 });

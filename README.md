@@ -43,6 +43,7 @@ supabase/
   migrations/                    Migrações posteriores
   functions/portal-otp/           Backend da verificação por código
   functions/agent-avatar/         Upload autenticado e validação de fotografias
+  functions/equipment-image/     Gravação e limpeza de imagens de equipamento
 tests/
   core.test.mjs                  Datas, pesquisa e tratamento de texto
   rls.test.mjs                   Políticas e transações em PostgreSQL/PGlite
@@ -138,7 +139,7 @@ As permissões ficam na base de dados, não no armazenamento local. Nenhum utili
 
 **Fardamento:** categorias livres, códigos copiáveis, nota editável e upload de fotografias. Cada linha do formulário usa `Peça = código`, por exemplo `T-Shirt = 192-3`. Usa `N/A` se não se aplicar. Podes adicionar novas peças e categorias.
 
-**Equipamento:** categorias livres, notas, ordem, fotografias e indicação obrigatório/opcional. Não é necessário editar código para adicionar categorias.
+**Equipamento:** categorias livres, notas, ordem e indicação obrigatório/opcional. O Comando pode adicionar ou substituir imagens no formulário de edição, com recorte, zoom, reposicionamento e ajuste proporcional. O Supabase guarda a imagem ajustada e limpa os ficheiros que deixam de ter referências. [Ver utilização, instalação e testes](IMAGENS_EQUIPAMENTO.md).
 
 **Regulamento:** artigos por capítulo, índice e pesquisa. O conteúdo inicial é um **modelo a validar pelo Comando**, pois a captura não mostra os artigos.
 

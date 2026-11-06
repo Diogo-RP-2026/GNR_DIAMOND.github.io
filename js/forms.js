@@ -1,8 +1,9 @@
 import {startOTP} from './otp.js';
 import {accountDeletionControls} from './accounts.js';
+import {equipmentPhotoField,mountEquipmentPhoto,equipmentPhoto,disposeEquipmentPhoto} from './image-crop.js';
 // Formulários reutilizáveis. Os documentos com participantes usam funções SQL atómicas.
 import {e,RANKS,PIECES,TABS,lisbonInput,lisbonISO,dateRange,discordURL,errorMessage,toast,uniform} from './core.js';
-import {db,state,loadOtpPolicy,isCommand,canManageEvent,canLog,hasTab,result,rpc,save,upload,releaseImages} from './api.js';
+import {db,state,loadOtpPolicy,isCommand,canManageEvent,canLog,hasTab,result,rpc,save,upload,releaseImages,hydrateImages} from './api.js';
 
 const fields={
   agent_qualifications:[['kind','Tipo','select',true,['formacao','especializacao']],['name','Nome','text',true],['completed_on','Data de conclusão','date',true],['issuer','Entidade ou instrutor responsável','text']],
@@ -19,11 +20,12 @@ const fields={
   institutional_content:[['title','Título','text',true],['body','Apresentação institucional','textarea',true],['mission','Missão','textarea',true],['values_text','Valores (um por linha)','textarea',true]],
 };
 const labels={agent_qualifications:'formação ou especialização',agent_distinctions:'distinção',members:'membro',announcements:'anúncio',events:'evento',warnings:'aviso',uniforms:'categoria de fardamento',equipment:'equipamento',regulations:'artigo',event_logs:'registo',contact_info:'Início e Contactos',institutional_content:'Quem Somos'};
-const photoTabs={members:'equipa',uniforms:'fardamento',equipment:'equipamento'};
+const photoTabs={members:'equipa',uniforms:'fardamento'};
 export function isDirty() {const form=document.querySelector('#editor form');return !!form && form.dataset.dirty==='true';}
 export function closeEditor(force=false) {
   if(!force&&document.querySelector('#editor form')?.dataset.saving==='true')return false;
   if(!force&&isDirty()&&!confirm('Descartar as alterações por guardar?'))return false;
+  disposeEquipmentPhoto(document.querySelector('#editor form'));
   releaseImages(document.querySelector('#editor'));document.querySelector('#editor').close();document.querySelector('#editor-body').replaceChildren();return true;
 }
 function fieldHTML(spec,row) {
@@ -55,10 +57,13 @@ export async function openEditor(table,id,cache,kind) {
     const historical=(row[table==='warnings'?'warning_members':'event_log_participants']||[]).filter(p=>!p.member_id);
     participants=`${historical.length?`<p class="notice small">Participantes históricos preservados: ${historical.map(p=>e(p.member_snapshot.name)).join(', ')}.</p>`:''}<fieldset class="participants"><legend>${table==='warnings'?'Operacionais visados':'Participantes'} (obrigatório)</legend><div class="participants-list">${members.map(m=>`<label class="check-label"><input name="participants" type="checkbox" value="${m.id}" ${selected.includes(m.id)?'checked':''}><span>${e(uniform(m.uniform_number))} · ${e(m.name)}<small>${e(m.rank)}</small></span></label>`).join('')}</div>${!members.length?'<p>Adiciona primeiro os membros na Equipa.</p>':''}</fieldset>`;
   }
-  const photo=photoTabs[table]?`<fieldset><legend>Fotografia</legend>${row.image_path?'<p class="muted small">Já existe uma fotografia guardada.</p><label class="check-label"><input name="remove_photo" type="checkbox">Remover fotografia atual</label>':''}<label>Escolher imagem do computador<input name="photo" type="file" accept="image/png,image/jpeg,image/webp"></label><p class="muted small">JPG, PNG ou WebP · máximo 5 MB.</p><img id="photo-preview" alt="Pré-visualização da nova fotografia" hidden></fieldset>`:'';
+  const photo=table==='equipment'?equipmentPhotoField(row):photoTabs[table]?`<fieldset><legend>Fotografia</legend>${row.image_path?'<p class="muted small">Já existe uma fotografia guardada.</p><label class="check-label"><input name="remove_photo" type="checkbox">Remover fotografia atual</label>':''}<label>Escolher imagem do computador<input name="photo" type="file" accept="image/png,image/jpeg,image/webp"></label><p class="muted small">JPG, PNG ou WebP · máximo 5 MB.</p><img id="photo-preview" alt="Pré-visualização da nova fotografia" hidden></fieldset>`:'';
   document.querySelector('#editor-title').textContent=`${id?'Editar':'Criar'} ${labels[table]}`;
   document.querySelector('#editor-body').innerHTML=`<form id="content-form" data-table="${table}" data-id="${id || ''}">${fields[table].map(f=>fieldHTML(f,row)).join('')}${participants}${photo}${['events','event_logs','announcements'].includes(table)?'<p class="muted small">Datas e horas de Portugal continental (Europe/Lisbon). Na hora repetida de outono é usada a primeira ocorrência.</p>':''}<p class="form-error" role="alert" hidden></p><div class="form-actions"><button class="button primary" type="submit">Guardar alterações</button><button class="button outline" type="button" data-action="close">Cancelar</button></div></form>`;
   document.querySelector('#editor').showModal();
+  if(table==='equipment'){
+    const form=document.querySelector('#content-form');form.dataset.revision=record?String(record.revision):'';mountEquipmentPhoto(form);await hydrateImages(form);
+  }
 }
 export function openAccess(id,cache) {
   if(!isCommand())throw new Error('Apenas o Comando gere acessos.');
@@ -99,6 +104,16 @@ export async function submitContent(form,cache) {
   }
   const members=fd.getAll('participants');
   if(['warnings','event_logs'].includes(table)&&!members.length&&!(cache[table]||[]).find(r=>String(r.id)===String(id))?.[table==='warnings'?'warning_members':'event_log_participants']?.some(p=>!p.member_id))throw new Error('Seleciona pelo menos um membro da equipa.');
+  if(table==='equipment'){
+    const photo=equipmentPhoto(form),body=new FormData();
+    form.dataset.equipmentId ||= id || crypto.randomUUID();
+    body.set('data',JSON.stringify({id:form.dataset.equipmentId,fields:data,image_action:photo?'replace':fd.has('remove_photo')?'remove':'keep',expected_revision:form.dataset.revision?Number(form.dataset.revision):null}));
+    if(photo)body.set('photo',photo,'equipamento.jpg');
+    const {data:response,error}=await db.functions.invoke('equipment-image',{body});
+    if(error){let detail;try{detail=await error.context?.json();}catch{}throw new Error(detail?.error||'Não foi possível guardar o equipamento. Verifica a ligação e tenta novamente.');}
+    if(response?.ok!==true||!response.equipment?.id)throw new Error('Não foi possível confirmar a gravação do equipamento.');
+    return response.cleanup_pending?'Equipamento guardado. A limpeza dos ficheiros anteriores será repetida automaticamente.':null;
+  }
   let newPath=null;
   const old=(cache[table] || []).find(r=>String(r.id)===String(id));
   try {
@@ -127,7 +142,7 @@ export async function deleteRecord(table,id,cache) {
   if(!confirm(`Apagar ${labels[table]} "${row.title || row.name || row.event_type}"? Esta ação remove também as respostas e ligações deste registo.`))return false;
   const deleted=await result(db.from(table).delete().eq('id',id).select('id'));
   if(!deleted.length)throw new Error('Não foi possível apagar: registo inexistente ou sem autorização.');
-  if(row.image_path)await db.storage.from('ushe-media').remove([row.image_path]);
+  if(row.image_path&&table!=='equipment')await db.storage.from('ushe-media').remove([row.image_path]);
   return true;
 }
 export async function submitAuth(form) {

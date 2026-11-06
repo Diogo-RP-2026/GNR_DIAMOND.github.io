@@ -10,3 +10,7 @@ verify_jwt = true
 # Supports the project's current asymmetric signing keys.
 [functions.account-admin]
 verify_jwt = false
+
+# Explicit Auth/role validation for saves; single-use DB tickets for Cron cleanup.
+[functions.equipment-image]
+verify_jwt = false

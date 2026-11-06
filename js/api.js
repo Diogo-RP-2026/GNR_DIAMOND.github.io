@@ -62,8 +62,17 @@ export async function hydrateImages(root=document) {
     // response that may precede account deletion or a permission change.
     const data=await result(db.storage.from(img.dataset.bucket || 'ushe-media').download(img.dataset.path,{cacheNonce:crypto.randomUUID()},{cache:'no-store'}));
     if(!img.isConnected)return;
-    const url=URL.createObjectURL(data);img.src=url;img.dataset.objectUrl=url;img.hidden=false;
-    const fallback=img.parentElement.querySelector('.image-placeholder');if(fallback)fallback.hidden=true;
+    const url=URL.createObjectURL(data);img.src=url;img.dataset.objectUrl=url;
+    const fallback=img.parentElement.querySelector('.image-placeholder');
+    if(img.parentElement.classList.contains('equipment-media')&&typeof img.decode==='function'){
+      try{await img.decode();}catch{
+        URL.revokeObjectURL(url);
+        if(img.dataset.objectUrl===url){delete img.dataset.objectUrl;img.removeAttribute('src');img.hidden=true;if(fallback)fallback.hidden=false;}
+        return;
+      }
+      if(!img.isConnected||img.dataset.objectUrl!==url){URL.revokeObjectURL(url);return;}
+    }
+    img.hidden=false;if(fallback)fallback.hidden=true;
   }));
 }
 export function releaseImages(root=document) {

@@ -1,0 +1,14 @@
+<!doctype html><html lang="pt-PT"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base href="../"><title>Teste local do editor de equipamento</title><link rel="stylesheet" href="./style.css"></head><body><main class="container page"><h1>Teste local do editor</h1><p>Usa apenas uma imagem sintética. Não inicia sessão nem grava no Supabase.</p><button class="button primary" id="open">Abrir formulário de teste</button><output id="result" role="status"></output></main><dialog id="fixture"><div class="dialog-header"><h2>Equipamento de teste</h2></div><div id="editor-body"><form id="fixture-form"></form></div></dialog><script type="module">
+import {equipmentPhotoField,mountEquipmentPhoto,equipmentPhoto} from './js/image-crop.js';
+const form=document.querySelector('#fixture-form');form.innerHTML=equipmentPhotoField({name:'Imagem sintética'})+'<button class="button" type="button" id="load">Carregar imagem sintética</button><button class="button primary" type="submit">Validar exportação local</button>';
+mountEquipmentPhoto(form);document.querySelector('#open').onclick=()=>document.querySelector('#fixture').showModal();
+document.querySelector('#load').onclick=async()=>{
+ const source=document.createElement('canvas');source.width=1200;source.height=900;const c=source.getContext('2d');c.fillStyle='#e23d3d';c.fillRect(0,0,600,900);c.fillStyle='#3079dd';c.fillRect(600,0,600,900);
+ c.fillStyle='#ffffff';c.font='bold 70px sans-serif';c.fillText('ESQUERDA',60,480);c.fillText('DIREITA',650,480);
+ const blob=await new Promise(resolve=>source.toBlob(resolve,'image/png'));const transfer=new DataTransfer();transfer.items.add(new File([blob],'imagem-teste.png',{type:'image/png'}));const input=form.querySelector('[type="file"]');input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));
+};
+form.onsubmit=async event=>{event.preventDefault();const blob=equipmentPhoto(form),out=document.querySelector('#result');if(!blob){out.textContent='Sem exportação: cancelar manteve a imagem anterior.';return;}
+ const image=await createImageBitmap(blob),canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;const c=canvas.getContext('2d');c.drawImage(image,0,0);const pixel=[...c.getImageData(4,4,1,1).data];out.textContent=`Exportação real: ${image.width} × ${image.height} px · ${blob.type} · pixel superior esquerdo: ${pixel.join(',')}.`;
+ document.querySelector('#fixture').close();image.close();
+};
+</script></body></html>

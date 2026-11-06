@@ -1,5 +1,6 @@
 import {feedPage} from './feed.js';
 import {otpScreen} from './otp.js';
+import {equipmentImageHTML} from './image-crop.js';
 // Componentes e páginas. Nenhum conteúdo reservado é incluído no JavaScript público.
 import {e,date,uniform,initials,normalize,orderedEvents,orderedResponses,discordURL,heading,button,cardActions,empty,RANKS,PIECES} from './core.js';
 import {db,state,isCommand,canManageEvent,hasTab,canLog,rows,rpc,result} from './api.js';
@@ -74,7 +75,7 @@ export async function uniforms() {
 export async function equipment() {
   const data=await rows('equipment','*','sort_order');
   const categories=[...new Set(data.map(v=>v.category))];
-  return {html:`<section class="container page">${heading('PRONTIDÃO OPERACIONAL','Equipamento','Confere o material antes de cada ativação da unidade.',isCommand()?create('equipment','Adicionar equipamento'):'')}${categories.length?categories.map(category=>`<section class="equipment-section"><div class="rank-heading"><span>◇</span><h2>${e(category)}</h2></div><div class="equipment-grid">${data.filter(v=>v.category===category).map(v=>`<article class="equipment-card ${v.mandatory?'mandatory':''}">${v.image_path?image(v.image_path,v.name):'<span class="equipment-icon">◇</span>'}<span class="badge">${v.mandatory?'Obrigatório em qualquer ativação':'Opcional'}</span><h3>${e(v.name)}</h3>${v.notes?`<p class="muted">${e(v.notes)}</p>`:''}${cardActions('equipment',v.id,isCommand())}</article>`).join('')}</div></section>`).join(''):empty()}</section>`,cache:{equipment:data}};
+  return {html:`<section class="container page">${heading('PRONTIDÃO OPERACIONAL','Equipamento','Confere o material antes de cada ativação da unidade.',isCommand()?create('equipment','Adicionar equipamento'):'')}${categories.length?categories.map(category=>`<section class="equipment-section"><div class="rank-heading"><span>◇</span><h2>${e(category)}</h2></div><div class="equipment-grid">${data.filter(v=>v.category===category).map(v=>`<article class="equipment-card ${v.mandatory?'mandatory':''}">${equipmentImageHTML(v.image_path,v.name)}<span class="badge">${v.mandatory?'Obrigatório em qualquer ativação':'Opcional'}</span><h3>${e(v.name)}</h3>${v.notes?`<p class="muted">${e(v.notes)}</p>`:''}${cardActions('equipment',v.id,isCommand())}</article>`).join('')}</div></section>`).join(''):empty()}</section>`,cache:{equipment:data}};
 }
 export async function regulations() {
   const data=await rows('regulations','*','article_number');

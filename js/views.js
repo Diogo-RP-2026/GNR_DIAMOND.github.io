@@ -1,6 +1,7 @@
 import {feedPage} from './feed.js';
 import {otpScreen} from './otp.js';
 import {equipmentImageHTML} from './image-crop.js';
+import {adminAuditPage} from './admin-audit.js';
 // Componentes e páginas. Nenhum conteúdo reservado é incluído no JavaScript público.
 import {e,date,uniform,initials,normalize,orderedEvents,orderedResponses,discordURL,heading,button,cardActions,empty,RANKS,PIECES} from './core.js';
 import {db,state,isCommand,canManageEvent,hasTab,canLog,rows,rpc,result} from './api.js';
@@ -95,11 +96,13 @@ export async function training() {
   return {html:`<section class="container page">${heading('Formação da unidade','Treinamentos','Treinos e ações de formação da USHE.',canLog()?create('event_logs','Criar treino'):'')}<div class="feed">${data.length?data.map(v=>`<article class="panel log-card"><div class="document-meta"><span class="badge">${e(v.event_type)}</span><span>${e(v.location)}</span></div><h2>${e(date(v.starts_at))} → ${e(date(v.ends_at))}</h2><p class="prose">${e(v.summary)}</p>${v.observations?`<p class="prose muted">${e(v.observations)}</p>`:''}${cardActions('event_logs',v.id,isCommand())}</article>`).join(''):empty('Ainda não existem treinamentos registados.')}</div></section>`,cache:{event_logs:data}};
 }
 
-export const ADMIN_AREAS=[['users','Utilizadores e acessos'],['members','Equipa'],['announcements','Anúncios'],['events','Eventos'],['warnings','Avisos'],['uniforms','Fardamento'],['equipment','Equipamento'],['regulations','Regulamento'],['event_logs','Registos'],['contact_info','Início e Contactos'],['institutional_content','Quem Somos']];
+export const ADMIN_AREAS=[['users','Utilizadores e acessos'],['members','Equipa'],['announcements','Anúncios'],['events','Eventos'],['warnings','Avisos'],['uniforms','Fardamento'],['equipment','Equipamento'],['regulations','Regulamento'],['event_logs','Registos'],['audit','Logs'],['contact_info','Início e Contactos'],['institutional_content','Quem Somos']];
 export async function administration(area='users') {
   if(!ADMIN_AREAS.some(a=>a[0]===area))area='users';
-  let data,permissions=[],cache={},html;
-  if(area==='users') {
+  let data,permissions=[],cache={},html,mount;
+  if(area==='audit') {
+    ({html,mount}=adminAuditPage());
+  } else if(area==='users') {
     let accounts;
     [data,permissions,accounts]=await Promise.all([rows('profiles','*','created_at'),rows('tab_permissions'),rpc('account_admin',{p_action:'list'})]);
     if(!accounts?.ok)throw new Error('Não foi possível confirmar a gestão de contas.');
@@ -111,7 +114,7 @@ export async function administration(area='users') {
     data=await rows(area,select);cache[area]=data;
     html=`<div class="admin-toolbar">${['contact_info','institutional_content'].includes(area)?'<p>Textos publicados e identidade da unidade.</p>':create(area,'Adicionar')}</div><div class="admin-list">${data.length?data.map(v=>`<article class="admin-row"><div><h3>${e(v.title || v.name || v.hero_title || `${v.event_type} · ${date(v.starts_at)}`)}</h3><p class="muted small">${e(v.rank || v.category || v.chapter || v.location || '')}</p></div>${area==='members'?`<a class="text-link" href="#/perfil?id=${v.id}">Ver perfil</a>${button('official-profile','Gerir dados oficiais',`data-id="${v.id}"`)}`:''}${cardActions(area,v.id,!['contact_info','institutional_content'].includes(area)) || button('edit','Editar',`data-table="${area}" data-id="${v.id}"`)}</article>`).join(''):empty()}</div>`;
   }
-  return {html:`<section class="container page">${heading('ÁREA DE COMANDO','Administração','Conteúdos, utilizadores e permissões da unidade.')}<div class="admin-tabs">${ADMIN_AREAS.map(([key,label])=>`<a class="${key===area?'active':''}" href="#/administracao?area=${key}" ${key===area?'aria-current="page"':''}>${e(label)}</a>`).join('')}</div><h2 class="admin-heading">${e(ADMIN_AREAS.find(a=>a[0]===area)[1])}</h2>${html}</section>`,cache};
+  return {html:`<section class="container page">${heading('ÁREA DE COMANDO','Administração','Conteúdos, utilizadores e permissões da unidade.')}<div class="admin-tabs">${ADMIN_AREAS.map(([key,label])=>`<a class="${key===area?'active':''}" href="#/administracao?area=${key}" ${key===area?'aria-current="page"':''}>${e(label)}</a>`).join('')}</div><h2 class="admin-heading">${e(ADMIN_AREAS.find(a=>a[0]===area)[1])}</h2>${html}</section>`,cache,mount};
 }
 export function login(mode='login') {
   if(state.otp)return otpScreen();

@@ -68,7 +68,7 @@ test('account deletion: current permissions, protected command, historical snaps
   assert.equal((await db.query('select count(*) n from public.event_logs where id=$1',[log])).rows[0].n,1);
   assert.equal((await db.query('select created_by,created_by_name from public.event_logs where id=$1',[log])).rows[0].created_by_name,'Deletion test');
   for(const [table,key,value] of [['event_log_participants','log_id',log],['warning_members','warning_id',warning]]){const p=(await db.query('select * from public.'+table+' where '+key+'=$1',[value])).rows[0];assert.equal(p.member_id,null);assert.equal(p.member_snapshot.name,'Former agent');}
-  const audit=(await db.query("select * from private.admin_audit_log where target_id=$1 and result='succeeded'",[id])).rows;assert.equal(audit.length,1);assert.equal(audit[0].actor_id,uid.command);assert.equal(audit[0].target_name,'Former agent');
+  const audit=(await db.query("select * from private.admin_audit_log where target_id=$1 and action='account.delete' and result='succeeded'",[id])).rows;assert.equal(audit.length,1);assert.equal(audit[0].actor_id,uid.command);assert.equal(audit[0].target_name,'Former agent');
  });
  await t.test('storage/database failure is resumable and Auth/profile/member deletion is atomic',async()=>{
   const {id,member}=await createTarget();await admin();const plan=await rpc('account_admin',{p_action:'begin',p_target:id});
@@ -89,6 +89,6 @@ test('account deletion: current permissions, protected command, historical snaps
   await assert.rejects(db.exec("insert into private.admin_audit_log(actor_name,action,target_name,result) values('Forged','delete','Test','succeeded')"),/permission denied/);
   await assert.rejects(db.exec('delete from private.admin_audit_log'),/permission denied/);
   await root();assert.equal((await db.query('select count(*) n from storage.objects where name=$1',['equipa/'+id+'.jpg'])).rows[0].n,1);
-  await assert.rejects(db.exec('delete from private.admin_audit_log'),/permanentes/);await assert.rejects(db.exec('truncate private.admin_audit_log'),/permanentes/);await assert.rejects(db.exec("update private.admin_audit_log set actor_name='Forged'"),/permanentes/);
+  await assert.rejects(db.exec('delete from private.admin_audit_log'),/permanentes/);await assert.rejects(db.exec('truncate private.admin_audit_log cascade'),/permanentes/);await assert.rejects(db.exec("update private.admin_audit_log set actor_name='Forged'"),/permanentes/);
  });
 });

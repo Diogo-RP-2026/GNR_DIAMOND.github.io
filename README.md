@@ -141,6 +141,8 @@ As permissões ficam na base de dados, não no armazenamento local. Nenhum utili
 
 **Equipamento:** categorias livres, notas, ordem e indicação obrigatório/opcional. O Comando pode adicionar ou substituir imagens no formulário de edição, com recorte, zoom, reposicionamento e ajuste proporcional. O Supabase guarda a imagem ajustada e limpa os ficheiros que deixam de ter referências. [Ver utilização, instalação e testes](IMAGENS_EQUIPAMENTO.md).
 
+**Logs da Administração:** o Comando consulta a auditoria permanente de contas, perfis e equipamento em **Administração → Logs**. A listagem tem pesquisa, filtros e paginação. Ocultar um registo guarda a autoria e a data em separado e mantém o original acessível em **Ocultos**. [Ver utilização, migração e testes](LOGS_ADMINISTRACAO.md).
+
 **Regulamento:** artigos por capítulo, índice e pesquisa. O conteúdo inicial é um **modelo a validar pelo Comando**, pois a captura não mostra os artigos.
 
 **Registos:** tipo livre, início/fim, local, participantes, resumo e observações, com filtros por data e tipo. A gravação do documento e dos participantes é uma única transação. Depois de submetidos, apenas o Comando corrige ou apaga registos. Registos hospitalares referem-se ao roleplay da cidade Diamond.

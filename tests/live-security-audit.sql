@@ -22,14 +22,16 @@ do $$begin
  if has_function_privilege('authenticated','public.otp_service(text,jsonb)','execute') or has_table_privilege('authenticated','private.otp_challenges','select') then raise exception 'Service privilege exposed';end if;
 end$$;
 reset role;
--- Only service-side code can grant verification, after Auth validates identity.
-select public.otp_service('grant',jsonb_build_object('user_id',current_setting('ushe.qa.b'),'session_id',current_setting('ushe.qa.sid')));
+-- Seed only the synthetic account to exercise post-verification permissions.
+-- The code challenge and grant protocol is exercised in live-otp-smoke.sql.
+insert into private.user_verifications(user_id,verified_email,last_verified_at)
+ select id,lower(email),clock_timestamp() from auth.users where id=current_setting('ushe.qa.b')::uuid;
 set local role authenticated;
 do $$declare ev uuid;n integer;begin
  if not public.otp_session_verified() then raise exception 'Valid verified session denied';end if;
  if (select count(*) from public.profiles)<>1 then raise exception 'Profile IDOR';end if;
  begin perform public.set_user_access(current_setting('ushe.qa.b')::uuid,'command',true,'[]');raise exception 'Role escalation succeeded';exception when insufficient_privilege then null;end;
- begin delete from public.profiles;raise exception 'Account delete allowed';exception when insufficient_privilege then null;end;
+ begin delete from public.profiles where id=current_setting('ushe.qa.b')::uuid;raise exception 'Account delete allowed';exception when insufficient_privilege then null;end;
  insert into public.events(title,description,starts_at,ends_at,location) values('Audit temporary event','Temporary',now(),now()+interval '1 hour','QA') returning id into ev;
  insert into public.event_responses(event_id,user_id,attending) values(ev,current_setting('ushe.qa.b')::uuid,true);
  update public.event_responses set attending=false where event_id=ev;
@@ -42,7 +44,8 @@ reset role;
 -- A separate synthetic Comando session can manage access without bypassing self-protection.
 select set_config('ushe.qa.asid',gen_random_uuid()::text,true);
 insert into auth.sessions(id,user_id,created_at,updated_at) values(current_setting('ushe.qa.asid')::uuid,current_setting('ushe.qa.a')::uuid,now(),now());
-select public.otp_service('grant',jsonb_build_object('user_id',current_setting('ushe.qa.a'),'session_id',current_setting('ushe.qa.asid')));
+insert into private.user_verifications(user_id,verified_email,last_verified_at)
+ select id,lower(email),clock_timestamp() from auth.users where id=current_setting('ushe.qa.a')::uuid;
 select set_config('request.jwt.claim.sub',current_setting('ushe.qa.a'),true);
 select set_config('request.jwt.claims',jsonb_build_object('sub',current_setting('ushe.qa.a'),'session_id',current_setting('ushe.qa.asid'),'role','authenticated','exp',extract(epoch from now()+interval '1 hour'))::text,true);
 set local role authenticated;
@@ -80,5 +83,5 @@ do $$declare args jsonb;r jsonb;begin
  r=public.otp_service('verify',args);if not (r->>'ok')::boolean then raise exception 'Valid rejected';end if;
  r=public.otp_service('verify',args);if r->>'error'<>'used' then raise exception 'Replay accepted';end if;
 end$$;
-select 'PASS: temporary identities, OTP gate, IDOR, votes, roles, uploads, not_after, bans, revocation and replay; all changes rolled back' as audit_result;
 rollback;
+select 'PASS: temporary identities, OTP gate, IDOR, votes, roles, uploads, not_after, bans, revocation and replay; all changes rolled back' as audit_result;

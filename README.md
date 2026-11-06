@@ -1,5 +1,7 @@
 # USHE — Unidade de Segurança e Honras do Estado
 
+Consulta a [entrega final](ENTREGA_FINAL.md) para ver os cinco pontos publicados, as migrações, a configuração e a validação.
+
 O portal inclui **Perfil do Agente**, acessível pela conta e pela Equipa, com fotografia circular, biografia, dados oficiais, subunidades, qualificações, distinções e atividade sujeita a permissões. Instalação e regras em [PERFIL_AGENTE.md](PERFIL_AGENTE.md).
 
 O portal inclui efeitos de interface e verificação por código de quatro dígitos, validado no backend. Contas novas verificam o email; depois, cada verificação concluída permite entrar durante 30 dias sem repetir o código. O servidor exige renovação quando o prazo termina, incluindo em sessões abertas. Instalação, migração e testes em [VERIFICACAO_30_DIAS.md](VERIFICACAO_30_DIAS.md). As instruções de envio estão no [guia de email](ATIVAR_OTP_GMAIL.md).

@@ -51,6 +51,7 @@ A conta administradora do PostgreSQL continua a conseguir modificar o esquema e 
 - `npm test`: 109 testes locais aprovados, incluindo PostgreSQL real em WASM, o handler da função e a interface em DOM. Auth e Storage são simulados nesta camada.
 - `npm run build`, verificações de sintaxe JavaScript e `git diff --check` aprovados.
 - `tests/live-account-admin.sql`: teste aprovado no PostgreSQL remoto, com contas, sessões e registo histórico sintéticos. Todas as alterações desse teste são revertidas por `ROLLBACK`.
+  A versão da entrega final usa as migrações dos 30 dias e dos logs para confirmar também a preservação de um log oculto após a eliminação.
 - `tests/live-account-admin.mjs`: teste HTTP com contas temporárias reservadas em `example.invalid`, login real, verificação concedida apenas às sessões dessas fixtures, carregamento e associação de fotografias reais, eliminação e recusa dos acessos antigos. Resultado final: **16 cenários HTTP aprovados**. Os quatro utilizadores temporários criados nas duas execuções foram removidos; não restam eliminações pendentes. As contagens reais mantêm-se em 4 contas, 21 agentes, 1 aviso e 0 registos operacionais. Os 8 logs administrativos dessas operações de teste permanecem, conforme a regra de auditoria permanente.
 - Advisor: permanece o aviso anterior de proteção contra palavras-passe comprometidas desativada. As tabelas privadas sem políticas são intencionais: não concedem acesso direto ao cliente e só são manipuladas por funções autorizadas.
 

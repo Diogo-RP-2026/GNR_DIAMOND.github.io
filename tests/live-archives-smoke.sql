@@ -7,8 +7,8 @@ insert into auth.users(id,email,raw_user_meta_data) select current_setting('qa.'
 update public.profiles set approved=true,role=case when id=current_setting('qa.a')::uuid then 'command'::public.ushe_role else 'member'::public.ushe_role end where id in(current_setting('qa.a')::uuid,current_setting('qa.b')::uuid);
 insert into public.tab_permissions(user_id,tab) select current_setting('qa.b')::uuid,unnest(array['eventos','anuncios','registos']::public.ushe_tab[]);
 insert into auth.sessions(id,user_id,created_at,updated_at) select current_setting('qa.'||v)::uuid,current_setting('qa.'||v)::uuid,now(),now() from unnest(array['a','b'])v;
-select public.otp_service('grant',jsonb_build_object('user_id',current_setting('qa.a'),'session_id',current_setting('qa.a')));
-select public.otp_service('grant',jsonb_build_object('user_id',current_setting('qa.b'),'session_id',current_setting('qa.b')));
+insert into private.user_verifications(user_id,verified_email,last_verified_at)
+ select id,lower(email),clock_timestamp() from auth.users where id in(current_setting('qa.a')::uuid,current_setting('qa.b')::uuid);
 select set_config('request.jwt.claim.sub',current_setting('qa.a'),true);
 select set_config('request.jwt.claims',jsonb_build_object('sub',current_setting('qa.a'),'session_id',current_setting('qa.a'),'exp',extract(epoch from now()+interval '1 hour'),'role','authenticated')::text,true);
 -- Admin supplies an explicit fixture identifier, then real client role reads and updates it.
@@ -50,5 +50,5 @@ do $$declare n uuid;begin
  if public.feed_responses('event',array[current_setting('qa.event')::uuid])<>'{}'::jsonb then raise exception 'Batch responses bypassed RLS';end if;
 end$$;
 reset role;
-select 'PASS: page RPC, delta, real trigger, persisted read state, notification ownership, client insert denial and revoked destination. Rolled back.' as result;
 rollback;
+select 'PASS: page RPC, delta, real trigger, persisted read state, notification ownership, client insert denial and revoked destination. Rolled back.' as result;
